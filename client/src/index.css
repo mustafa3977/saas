@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg: #0A0A0A;
+    --color-surface: #141414;
+    --color-border: #2A2A2A;
+    --color-red: #E50914;
+    --color-gold: #B48A3C;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background-color: #0A0A0A;
+    color: #ffffff;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0A0A0A;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2A2A2A;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #E50914;
+  }
+}
+
+@layer components {
+  /* Cinematic Outlined Button */
+  .btn-cinematic {
+    @apply inline-flex items-center justify-center border border-white px-7 py-3 text-xs uppercase font-oswald font-medium tracking-widest text-white transition-all duration-300 hover:bg-brand-red hover:border-brand-red hover:shadow-[0_0_20px_rgba(229,9,20,0.5)] active:scale-95;
+  }
+
+  .btn-cinematic-red {
+    @apply inline-flex items-center justify-center bg-brand-red border border-brand-red px-7 py-3 text-xs uppercase font-oswald font-medium tracking-widest text-white transition-all duration-300 hover:bg-brand-red-hover hover:border-brand-red-hover hover:shadow-[0_0_25px_rgba(229,9,20,0.6)] active:scale-95;
+  }
+
+  /* Secondary Play Button */
+  .btn-play-portfolio {
+    @apply inline-flex items-center gap-3 text-xs uppercase font-oswald tracking-widest text-white transition-all duration-300 hover:text-brand-red;
+  }
+
+  /* Card Hover Effect */
+  .cinematic-card {
+    @apply bg-surface border border-border transition-all duration-300 hover:border-white/80 hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(0,0,0,0.8)];
+  }
+
+  /* Red Section Tagline with line */
+  .section-tag-container {
+    @apply flex items-center gap-3 mb-2 font-poppins text-xs font-semibold uppercase tracking-wider text-brand-red;
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
