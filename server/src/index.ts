@@ -157,6 +157,10 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-app.listen(PORT, () => {
-  logger.info(`Legacy Pixels Server running on http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    logger.info(`Legacy Pixels Server running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
