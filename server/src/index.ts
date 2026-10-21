@@ -1,8 +1,10 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import helmet from 'helmet';
+import helmetImport from 'helmet';
+import rateLimitImport from 'express-rate-limit';
+
 import cookieParser from 'cookie-parser';
-import rateLimit from 'express-rate-limit';
+
 import dotenv from 'dotenv';
 import { pino } from 'pino';
 import {
@@ -17,6 +19,8 @@ import {
 } from '@legacypixels/shared';
 
 dotenv.config();
+const helmet = (helmetImport as any).default ?? helmetImport;
+const rateLimit = (rateLimitImport as any).default ?? rateLimitImport;
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
