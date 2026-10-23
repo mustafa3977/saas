@@ -44,13 +44,142 @@ const MOODS = [
   'Playful & Joyous',
 ];
 
-const LANGUAGES = [
+const POPULAR_LANGUAGES = [
   'English',
   'Urdu',
+  'Hindi',
   'Spanish',
   'Arabic',
+  'French',
   'Punjabi',
+  'German',
+  'Italian',
+  'Portuguese',
+  'Mandarin Chinese',
+  'Russian',
+  'Japanese',
+  'Korean',
+  'Turkish',
   'Bilingual (English + Urdu)',
+  'Bilingual (English + Spanish)',
+  'Bilingual (English + Hindi)',
+  'Bilingual (English + French)',
+  'Bilingual (English + Arabic)',
+];
+
+const ALL_WORLD_LANGUAGES = [
+  'Afrikaans',
+  'Albanian',
+  'Amharic',
+  'Arabic',
+  'Armenian',
+  'Assamese',
+  'Azerbaijani',
+  'Basque',
+  'Belarusian',
+  'Bengali',
+  'Bosnian',
+  'Bulgarian',
+  'Burmese',
+  'Catalan',
+  'Cebuano',
+  'Chichewa',
+  'Chinese (Cantonese)',
+  'Chinese (Mandarin)',
+  'Corsican',
+  'Croatian',
+  'Czech',
+  'Danish',
+  'Dari',
+  'Dutch',
+  'English',
+  'Esperanto',
+  'Estonian',
+  'Filipino / Tagalog',
+  'Finnish',
+  'French',
+  'Galician',
+  'Georgian',
+  'German',
+  'Greek',
+  'Gujarati',
+  'Haitian Creole',
+  'Hausa',
+  'Hawaiian',
+  'Hebrew',
+  'Hindi',
+  'Hmong',
+  'Hungarian',
+  'Icelandic',
+  'Igbo',
+  'Indonesian',
+  'Irish',
+  'Italian',
+  'Japanese',
+  'Javanese',
+  'Kannada',
+  'Kazakh',
+  'Khmer',
+  'Kinyarwanda',
+  'Korean',
+  'Kurdish (Kurmanji / Sorani)',
+  'Kyrgyz',
+  'Lao',
+  'Latin',
+  'Latvian',
+  'Lithuanian',
+  'Luxembourgish',
+  'Macedonian',
+  'Malagasy',
+  'Malay',
+  'Malayalam',
+  'Maltese',
+  'Maori',
+  'Marathi',
+  'Mongolian',
+  'Nepali',
+  'Norwegian',
+  'Odia (Oriya)',
+  'Pashto',
+  'Persian / Farsi',
+  'Polish',
+  'Portuguese',
+  'Punjabi (Gurmukhi / Shahmukhi)',
+  'Romanian',
+  'Russian',
+  'Samoan',
+  'Scots Gaelic',
+  'Serbian',
+  'Sesotho',
+  'Shona',
+  'Sindhi',
+  'Sinhala',
+  'Slovak',
+  'Slovenian',
+  'Somali',
+  'Spanish',
+  'Sundanese',
+  'Swahili',
+  'Swedish',
+  'Tajik',
+  'Tamil',
+  'Tatar',
+  'Telugu',
+  'Thai',
+  'Tigrinya',
+  'Turkish',
+  'Turkmen',
+  'Ukrainian',
+  'Urdu',
+  'Uyghur',
+  'Uzbek',
+  'Vietnamese',
+  'Welsh',
+  'Xhosa',
+  'Yiddish',
+  'Yoruba',
+  'Zulu',
+  'Other / Custom Language',
 ];
 
 export const OrderWizardPage: React.FC = () => {
@@ -60,7 +189,7 @@ export const OrderWizardPage: React.FC = () => {
   const musicService = SERVICES_CATALOG.find((s) => s.slug === 'music') || SERVICES_CATALOG[0];
   const initialPackageId = searchParams.get('package') || 'pkg-cinematic-song';
 
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Step 1 State: Package & Add-ons
   const [selectedPackageId, setSelectedPackageId] = useState(initialPackageId);
@@ -85,17 +214,17 @@ export const OrderWizardPage: React.FC = () => {
     eventDate: '',
   });
 
-  // Step 3 State: Customer
+  // Step 3 State: Customer & Checkout
   const [customer, setCustomer] = useState({
     name: '',
     email: '',
     phone: '',
-    agreedToTerms: false,
-    agreedToRights: false,
+    agreedToTerms: true,
+    agreedToRights: true,
     optInMarketing: true,
   });
 
-  // Step 4 State: Checkout simulation
+  // Step 3 Payment State
   const [cardData, setCardData] = useState({
     number: '4242 •••• •••• 4242',
     exp: '12/28',
@@ -105,7 +234,7 @@ export const OrderWizardPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Step 5 State: Final Order confirmation
+  // Step 4 State: Final Order confirmation
   const [confirmedOrder, setConfirmedOrder] = useState<{
     orderNumber: string;
     totalCents: number;
@@ -132,7 +261,7 @@ export const OrderWizardPage: React.FC = () => {
     window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
-  // Step 2 Validation -> Proceed to Step 3
+  // Step 2 Validation -> Proceed to Step 3 (Review & Checkout)
   const handleProceedToStep3 = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -162,12 +291,14 @@ export const OrderWizardPage: React.FC = () => {
     window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
-  // Step 3 Validation -> Proceed to Step 4
-  const handleProceedToStep4 = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Step 3: Submit Order and Process Payment in One Click
+  const handleFinalCheckout = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsProcessing(true);
     setErrorMessage(null);
 
-    const validation = orderCustomerInfoSchema.safeParse({
+    // Validate patron details
+    const customerValidation = orderCustomerInfoSchema.safeParse({
       name: customer.name,
       email: customer.email,
       phone: customer.phone || undefined,
@@ -176,19 +307,11 @@ export const OrderWizardPage: React.FC = () => {
       optInMarketing: customer.optInMarketing,
     });
 
-    if (!validation.success) {
-      setErrorMessage(validation.error.errors[0]?.message || 'Please agree to terms and check contact info.');
+    if (!customerValidation.success) {
+      setErrorMessage(customerValidation.error.errors[0]?.message || 'Please provide your name and a valid email for song delivery.');
+      setIsProcessing(false);
       return;
     }
-
-    setCurrentStep(4);
-    window.scrollTo({ top: 120, behavior: 'smooth' });
-  };
-
-  // Step 4: Submit Order and Process Payment
-  const handleFinalCheckout = async () => {
-    setIsProcessing(true);
-    setErrorMessage(null);
 
     const addonsList: { addonId: string; name: string; priceCents: number }[] = [];
     if (fastDeliverySelected) {
@@ -268,7 +391,7 @@ export const OrderWizardPage: React.FC = () => {
         deliveryDate: deliveryDateStr,
       });
 
-      setCurrentStep(5);
+      setCurrentStep(4);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
       // Offline fallback
@@ -279,7 +402,7 @@ export const OrderWizardPage: React.FC = () => {
         packageName: selectedPackage.name.en,
         deliveryDate: 'Within 3-5 Days',
       });
-      setCurrentStep(5);
+      setCurrentStep(4);
     } finally {
       setIsProcessing(false);
     }
@@ -301,14 +424,13 @@ export const OrderWizardPage: React.FC = () => {
               </h1>
             </div>
 
-            {/* Stepper Dots */}
-            {currentStep < 5 && (
+            {/* Stepper Dots (Streamlined 3-step flow to minimize clicks) */}
+            {currentStep < 4 && (
               <div className="flex items-center gap-2 sm:gap-4">
                 {[
-                  { step: 1, label: 'Package' },
-                  { step: 2, label: 'Story Brief' },
-                  { step: 3, label: 'Details' },
-                  { step: 4, label: 'Review' },
+                  { step: 1, label: '1. Package' },
+                  { step: 2, label: '2. Story Brief' },
+                  { step: 3, label: '3. Instant Checkout' },
                 ].map((s) => (
                   <div key={s.step} className="flex items-center gap-2">
                     <div
@@ -329,7 +451,7 @@ export const OrderWizardPage: React.FC = () => {
                     >
                       {s.label}
                     </span>
-                    {s.step < 4 && <div className="hidden sm:block w-4 h-[1px] bg-[#2A2A2A]" />}
+                    {s.step < 3 && <div className="hidden sm:block w-4 h-[1px] bg-[#2A2A2A]" />}
                   </div>
                 ))}
               </div>
@@ -342,7 +464,7 @@ export const OrderWizardPage: React.FC = () => {
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 mt-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           {/* Main Step Form Body (8 cols) */}
-          <div className={`${currentStep === 5 ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
+          <div className={`${currentStep === 4 ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
             {/* STEP 1: PACKAGE & ADD-ONS */}
             {currentStep === 1 && (
               <div className="space-y-8">
@@ -448,11 +570,19 @@ export const OrderWizardPage: React.FC = () => {
                       <span className="font-oswald text-base font-bold text-[#E50914]">$9</span>
                     </div>
 
-                    {/* Extra revision */}
-                    <div className="p-4 rounded-sm border border-[#2A2A2A] bg-[#141414] flex items-center justify-between">
+                    {/* Extra revision with clear Price Display */}
+                    <div className={`p-4 rounded-sm border transition-all flex items-center justify-between ${
+                      extraRevisionsCount > 0
+                        ? 'bg-[#181818] border-[#E50914]'
+                        : 'bg-[#141414] border-[#2A2A2A] hover:border-white/50'
+                    }`}>
                       <div className="flex items-center gap-3">
-                        <div className="w-5 h-5 rounded-sm border border-[#444] bg-[#1c1c1c] flex items-center justify-center text-xs text-[#B5B5B5]">
-                          +
+                        <div className={`w-5 h-5 rounded-sm border flex items-center justify-center text-xs ${
+                          extraRevisionsCount > 0
+                            ? 'bg-[#E50914] border-[#E50914] text-white'
+                            : 'border-[#444] bg-[#1c1c1c] text-[#B5B5B5]'
+                        }`}>
+                          {extraRevisionsCount > 0 ? <Check className="w-3 h-3 text-white" /> : '+'}
                         </div>
                         <div>
                           <h4 className="font-oswald text-sm uppercase font-bold text-white">
@@ -463,22 +593,37 @@ export const OrderWizardPage: React.FC = () => {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setExtraRevisionsCount(Math.max(0, extraRevisionsCount - 1))}
-                          className="w-7 h-7 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white rounded flex items-center justify-center font-bold"
-                        >
-                          -
-                        </button>
-                        <span className="font-oswald text-sm px-2">{extraRevisionsCount}</span>
-                        <button
-                          type="button"
-                          onClick={() => setExtraRevisionsCount(extraRevisionsCount + 1)}
-                          className="w-7 h-7 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white rounded flex items-center justify-center font-bold"
-                        >
-                          +
-                        </button>
+
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 bg-[#0D0D0D] p-1 rounded-sm border border-[#2A2A2A]">
+                          <button
+                            type="button"
+                            onClick={() => setExtraRevisionsCount(Math.max(0, extraRevisionsCount - 1))}
+                            className="w-6 h-6 bg-[#222] hover:bg-[#333] text-white rounded-sm flex items-center justify-center font-bold text-xs transition-colors"
+                            aria-label="Decrease revisions"
+                          >
+                            -
+                          </button>
+                          <span className="font-oswald text-xs px-2 text-white min-w-[20px] text-center">
+                            {extraRevisionsCount}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setExtraRevisionsCount(extraRevisionsCount + 1)}
+                            className="w-6 h-6 bg-[#222] hover:bg-[#333] text-white rounded-sm flex items-center justify-center font-bold text-xs transition-colors"
+                            aria-label="Increase revisions"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="text-right min-w-[55px]">
+                          <span className="font-oswald text-base font-bold text-[#E50914] block">
+                            {extraRevisionsCount > 0 ? `+$${extraRevisionsCount * 10}` : '$10'}
+                          </span>
+                          <span className="text-[10px] font-poppins text-[#777] block">
+                            {extraRevisionsCount > 0 ? `($10 ea)` : 'each'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -629,18 +774,27 @@ export const OrderWizardPage: React.FC = () => {
 
                   <div>
                     <label className="block text-xs font-poppins uppercase tracking-wider text-[#B5B5B5] mb-1.5">
-                      Song Language *
+                      Song Language (All World Languages) *
                     </label>
                     <select
                       value={brief.songLanguage}
                       onChange={(e) => setBrief({ ...brief, songLanguage: e.target.value })}
                       className="w-full bg-[#141414] border border-[#2A2A2A] rounded-sm px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#E50914]"
                     >
-                      {LANGUAGES.map((l) => (
-                        <option key={l} value={l}>
-                          {l}
-                        </option>
-                      ))}
+                      <optgroup label="Popular Languages">
+                        {POPULAR_LANGUAGES.map((l) => (
+                          <option key={`pop-${l}`} value={l}>
+                            {l}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="All World Languages (A - Z)">
+                        {ALL_WORLD_LANGUAGES.map((l) => (
+                          <option key={`all-${l}`} value={l}>
+                            {l}
+                          </option>
+                        ))}
+                      </optgroup>
                     </select>
                   </div>
                 </div>
@@ -702,24 +856,24 @@ export const OrderWizardPage: React.FC = () => {
 
                   <button
                     type="submit"
-                    className="btn-cinematic-red w-2/3 flex items-center justify-center gap-2"
+                    className="btn-cinematic-red w-2/3 flex items-center justify-center gap-2 py-3"
                   >
-                    <span>Proceed to Step 3: Customer Details</span>
+                    <span>Proceed to Final Step: Instant Checkout</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </form>
             )}
 
-            {/* STEP 3: CUSTOMER CONTACT & RIGHTS */}
+            {/* STEP 3: UNIFIED CONTACT & INSTANT CHECKOUT (Single-Step to minimize clicks) */}
             {currentStep === 3 && (
-              <form onSubmit={handleProceedToStep4} className="space-y-6">
+              <form onSubmit={handleFinalCheckout} className="space-y-6">
                 <div>
                   <h2 className="font-oswald text-xl uppercase font-bold text-white tracking-wider mb-2">
-                    3. Patron Contact & Rights Declarations
+                    3. Contact & Instant Checkout
                   </h2>
                   <p className="font-raleway text-xs text-[#B5B5B5]">
-                    Where should our studio deliver your song masters and portal login credentials?
+                    Enter your delivery contact details and authorize production in a single secure step.
                   </p>
                 </div>
 
@@ -729,124 +883,14 @@ export const OrderWizardPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-poppins uppercase tracking-wider text-[#B5B5B5] mb-1.5">
-                      Your Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={customer.name}
-                      onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-                      placeholder="e.g. Elena Rostova"
-                      className="w-full bg-[#141414] border border-[#2A2A2A] rounded-sm px-4 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#E50914]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-poppins uppercase tracking-wider text-[#B5B5B5] mb-1.5">
-                      Your Email Address (For Master Delivery) *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={customer.email}
-                      onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-                      placeholder="elena@example.com"
-                      className="w-full bg-[#141414] border border-[#2A2A2A] rounded-sm px-4 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#E50914]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-poppins uppercase tracking-wider text-[#B5B5B5] mb-1.5">
-                    Phone / WhatsApp Number (For Production Notifications)
-                  </label>
-                  <input
-                    type="text"
-                    value={customer.phone}
-                    onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
-                    placeholder="+1 (555) 000-0000"
-                    className="w-full bg-[#141414] border border-[#2A2A2A] rounded-sm px-4 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#E50914]"
-                  />
-                </div>
-
-                {/* Checkboxes */}
-                <div className="space-y-4 pt-4 border-t border-[#2A2A2A]">
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      required
-                      checked={customer.agreedToTerms}
-                      onChange={(e) => setCustomer({ ...customer, agreedToTerms: e.target.checked })}
-                      className="mt-1 w-4 h-4 rounded bg-[#141414] border-[#2A2A2A] text-[#E50914] focus:ring-[#E50914]"
-                    />
-                    <span className="text-xs font-raleway text-[#CCCCCC] leading-relaxed">
-                      I agree to the <strong className="text-white">Terms of Production & Delivery</strong>. I understand that my song is custom created based on my brief with {selectedPackage.includedRevisions} included revisions.
-                    </span>
-                  </label>
-
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      required
-                      checked={customer.agreedToRights}
-                      onChange={(e) => setCustomer({ ...customer, agreedToRights: e.target.checked })}
-                      className="mt-1 w-4 h-4 rounded bg-[#141414] border-[#2A2A2A] text-[#E50914] focus:ring-[#E50914]"
-                    />
-                    <span className="text-xs font-raleway text-[#CCCCCC] leading-relaxed">
-                      I confirm ownership/rights to the stories and anecdotes provided, and receive a personal license to stream, share, and play the deliverable forever.
-                    </span>
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-4 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentStep(2)}
-                    className="btn-cinematic w-1/3 flex items-center justify-center gap-2"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Back</span>
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="btn-cinematic-red w-2/3 flex items-center justify-center gap-2"
-                  >
-                    <span>Proceed to Step 4: Final Review</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* STEP 4: REVIEW & CHECKOUT */}
-            {currentStep === 4 && (
-              <div className="space-y-8">
-                <div>
-                  <h2 className="font-oswald text-xl uppercase font-bold text-white tracking-wider mb-2">
-                    4. Order Summary & Secure Checkout
-                  </h2>
-                  <p className="font-raleway text-xs text-[#B5B5B5]">
-                    Verify your song brief details and initiate production.
-                  </p>
-                </div>
-
-                {errorMessage && (
-                  <div className="p-3 bg-red-950/60 border border-red-800 text-red-200 text-xs rounded-sm">
-                    {errorMessage}
-                  </div>
-                )}
-
-                {/* Brief Summary Box */}
-                <div className="bg-[#141414] border border-[#2A2A2A] p-6 rounded-sm space-y-4">
-                  <div className="flex items-center justify-between border-b border-[#2A2A2A] pb-3">
-                    <span className="font-oswald text-base uppercase text-white font-bold">
+                {/* Brief Summary Excerpt */}
+                <div className="bg-[#141414] border border-[#2A2A2A] p-4 rounded-sm space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#2A2A2A] pb-2">
+                    <span className="font-oswald text-sm uppercase text-white font-bold">
                       Song Concept Blueprint
                     </span>
                     <button
+                      type="button"
                       onClick={() => setCurrentStep(2)}
                       className="text-xs font-poppins text-[#E50914] hover:underline"
                     >
@@ -854,39 +898,82 @@ export const OrderWizardPage: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-raleway">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-raleway">
                     <div>
                       <span className="block text-[10px] uppercase font-poppins text-[#777]">Recipient</span>
-                      <strong className="text-white">{brief.recipientName}</strong>
+                      <strong className="text-white truncate block">{brief.recipientName}</strong>
                     </div>
                     <div>
                       <span className="block text-[10px] uppercase font-poppins text-[#777]">Genre</span>
-                      <strong className="text-white">{brief.genre}</strong>
+                      <strong className="text-white truncate block">{brief.genre}</strong>
                     </div>
                     <div>
-                      <span className="block text-[10px] uppercase font-poppins text-[#777]">Mood</span>
-                      <strong className="text-white">{brief.mood}</strong>
+                      <span className="block text-[10px] uppercase font-poppins text-[#777]">Language</span>
+                      <strong className="text-white truncate block">{brief.songLanguage}</strong>
                     </div>
                     <div>
                       <span className="block text-[10px] uppercase font-poppins text-[#777]">Vocals</span>
-                      <strong className="text-white capitalize">{brief.vocalPreference}</strong>
+                      <strong className="text-white capitalize truncate block">{brief.vocalPreference}</strong>
                     </div>
-                  </div>
-
-                  <div className="text-xs font-raleway text-[#B5B5B5] pt-2 border-t border-[#2A2A2A]">
-                    <span className="text-[10px] uppercase font-poppins text-[#777] block mb-1">Story Excerpt:</span>
-                    <p className="italic bg-[#0D0D0D] p-3 rounded border border-[#2A2A2A]/40 line-clamp-3">
-                      "{brief.storyDetails}"
-                    </p>
                   </div>
                 </div>
 
-                {/* Payment Simulation Form */}
-                <div className="bg-[#141414] border border-[#2A2A2A] p-6 rounded-sm space-y-4">
-                  <div className="flex items-center justify-between border-b border-[#2A2A2A] pb-3">
+                {/* Customer Details */}
+                <div className="bg-[#141414] border border-[#2A2A2A] p-5 rounded-sm space-y-4">
+                  <h3 className="font-oswald text-sm uppercase font-bold text-white tracking-wider border-b border-[#2A2A2A] pb-2">
+                    Patron Delivery Details
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-poppins uppercase tracking-wider text-[#B5B5B5] mb-1.5">
+                        Your Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={customer.name}
+                        onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+                        placeholder="e.g. Elena Rostova"
+                        className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-sm px-4 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#E50914]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-poppins uppercase tracking-wider text-[#B5B5B5] mb-1.5">
+                        Your Email (For Song Master Delivery) *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={customer.email}
+                        onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
+                        placeholder="elena@example.com"
+                        className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-sm px-4 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#E50914]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-poppins uppercase tracking-wider text-[#B5B5B5] mb-1.5">
+                      Phone / WhatsApp Number (For Production Notifications)
+                    </label>
+                    <input
+                      type="text"
+                      value={customer.phone}
+                      onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
+                      placeholder="+1 (555) 000-0000"
+                      className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-sm px-4 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#E50914]"
+                    />
+                  </div>
+                </div>
+
+                {/* Encrypted Payment Card Details */}
+                <div className="bg-[#141414] border border-[#2A2A2A] p-5 rounded-sm space-y-4">
+                  <div className="flex items-center justify-between border-b border-[#2A2A2A] pb-2">
                     <div className="flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-[#E50914]" />
-                      <span className="font-oswald text-base uppercase text-white font-bold">
+                      <span className="font-oswald text-sm uppercase text-white font-bold">
                         Encrypted Card Payment (Stripe Protected)
                       </span>
                     </div>
@@ -944,10 +1031,29 @@ export const OrderWizardPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                {/* Single Combined Agreement Checkbox (Pre-checked to eliminate unnecessary clicks) */}
+                <div className="pt-2">
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={customer.agreedToTerms && customer.agreedToRights}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setCustomer({ ...customer, agreedToTerms: checked, agreedToRights: checked });
+                      }}
+                      className="mt-0.5 w-4 h-4 rounded bg-[#141414] border-[#2A2A2A] text-[#E50914] focus:ring-[#E50914]"
+                    />
+                    <span className="text-xs font-raleway text-[#CCCCCC] leading-relaxed">
+                      I agree to the <strong className="text-white">Terms of Production & Delivery</strong> ({selectedPackage.includedRevisions} included revisions) and confirm rights to the stories provided for custom creation.
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-4 pt-4">
                   <button
                     type="button"
-                    onClick={() => setCurrentStep(3)}
+                    onClick={() => setCurrentStep(2)}
                     className="btn-cinematic w-1/3 flex items-center justify-center gap-2"
                   >
                     <ArrowLeft className="w-4 h-4" />
@@ -955,19 +1061,23 @@ export const OrderWizardPage: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={handleFinalCheckout}
+                    type="submit"
                     disabled={isProcessing}
-                    className="btn-cinematic-red w-2/3 flex items-center justify-center gap-2"
+                    className="btn-cinematic-red w-2/3 flex items-center justify-center gap-2 py-3"
                   >
                     <Lock className="w-4 h-4" />
-                    <span>{isProcessing ? 'Authorizing & Queuing Song...' : `Pay $${(totalCents / 100).toFixed(0)} USD & Start Production`}</span>
+                    <span>
+                      {isProcessing
+                        ? 'Authorizing & Queuing Song...'
+                        : `Pay $${(totalCents / 100).toFixed(0)} USD & Start Production`}
+                    </span>
                   </button>
                 </div>
-              </div>
+              </form>
             )}
 
-            {/* STEP 5: ORDER SUCCESS CONFIRMATION */}
-            {currentStep === 5 && confirmedOrder && (
+            {/* STEP 4: ORDER SUCCESS CONFIRMATION */}
+            {currentStep === 4 && confirmedOrder && (
               <div className="bg-[#141414] border border-[#2A2A2A] p-8 sm:p-12 rounded-sm shadow-2xl text-center space-y-6 max-w-2xl mx-auto">
                 <div className="w-20 h-20 rounded-full bg-[#E50914]/20 border-2 border-[#E50914] text-[#E50914] flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(229,9,20,0.4)]">
                   <CheckCircle2 className="w-10 h-10" />
@@ -1026,7 +1136,7 @@ export const OrderWizardPage: React.FC = () => {
           </div>
 
           {/* Sticky Order Summary Sidebar (4 cols) */}
-          {currentStep < 5 && (
+          {currentStep < 4 && (
             <div className="lg:col-span-4">
               <div className="sticky top-28 bg-[#141414] border border-[#2A2A2A] p-6 rounded-sm space-y-6">
                 <div>

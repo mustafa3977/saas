@@ -100,9 +100,9 @@ export const ServicesPage: React.FC = () => {
       </section>
 
       {/* Services Grid */}
-      <section className="py-20 bg-[#0A0A0A]">
+      <section className="py-14 sm:py-16 bg-[#0A0A0A]">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
             {filteredServices.map((service) => (
               <div
                 key={service.slug}
@@ -110,19 +110,19 @@ export const ServicesPage: React.FC = () => {
               >
                 <div>
                   {/* Hero Image Header with Badge */}
-                  <div className="aspect-[16/8] relative overflow-hidden bg-black">
+                  <div className="aspect-[16/6.5] relative overflow-hidden bg-black">
                     <img
                       src={service.heroImage}
                       alt={service.title.en}
                       className="w-full h-full object-cover filter brightness-80 group-hover:scale-105 transition-transform duration-700"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
-                    <div className="absolute top-4 left-4 flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-sm bg-black/80 border border-[#2A2A2A] flex items-center justify-center">
-                        {ICON_MAP[service.iconName] || <Film className="w-6 h-6 text-[#E50914]" />}
+                    <div className="absolute top-3 left-3 flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-sm bg-black/80 border border-[#2A2A2A] flex items-center justify-center">
+                        {ICON_MAP[service.iconName] || <Film className="w-4 h-4 text-[#E50914]" />}
                       </div>
                       {service.checkoutEnabled && (
-                        <span className="bg-[#E50914] text-white text-[10px] font-oswald tracking-widest px-2.5 py-1 uppercase rounded-sm font-semibold">
+                        <span className="bg-[#E50914] text-white text-[9px] font-oswald tracking-widest px-2 py-0.5 uppercase rounded-sm font-semibold">
                           Instant Online Booking
                         </span>
                       )}
@@ -130,9 +130,9 @@ export const ServicesPage: React.FC = () => {
                   </div>
 
                   {/* Body Content */}
-                  <div className="p-6">
-                    <div className="flex items-baseline justify-between mb-2">
-                      <h3 className="font-oswald text-2xl uppercase font-bold text-white tracking-wide group-hover:text-[#E50914] transition-colors">
+                  <div className="p-4 sm:p-5">
+                    <div className="flex items-baseline justify-between mb-1.5">
+                      <h3 className="font-oswald text-xl sm:text-2xl uppercase font-bold text-white tracking-wide group-hover:text-[#E50914] transition-colors">
                         {service.title.en}
                       </h3>
                       {service.startingPriceCents > 0 && (
@@ -142,22 +142,22 @@ export const ServicesPage: React.FC = () => {
                       )}
                     </div>
 
-                    <p className="font-poppins text-xs font-semibold uppercase tracking-wider text-[#E50914] mb-3">
+                    <p className="font-poppins text-[11px] font-semibold uppercase tracking-wider text-[#E50914] mb-2">
                       {service.tagline.en}
                     </p>
 
-                    <p className="font-raleway text-xs text-[#B5B5B5] leading-relaxed mb-6">
+                    <p className="font-raleway text-xs text-[#B5B5B5] leading-relaxed mb-4 line-clamp-3">
                       {service.fullDescription.en}
                     </p>
 
                     {/* What is included highlights */}
-                    <div className="space-y-2 mb-6 pt-4 border-t border-[#2A2A2A]">
-                      <span className="text-[11px] font-poppins uppercase tracking-wider text-[#B5B5B5] block">
+                    <div className="space-y-1.5 mb-2 pt-3 border-t border-[#2A2A2A]">
+                      <span className="text-[10px] font-poppins uppercase tracking-wider text-[#B5B5B5] block">
                         Core Deliverables:
                       </span>
                       {service.whatIsIncluded.slice(0, 3).map((item, idx) => (
                         <div key={idx} className="flex items-center gap-2 text-xs font-raleway text-white/90">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-[#B48A3C] flex-shrink-0" />
+                          <CheckCircle2 className="w-3 h-3 text-[#B48A3C] flex-shrink-0" />
                           <span>{item}</span>
                         </div>
                       ))}
@@ -166,26 +166,26 @@ export const ServicesPage: React.FC = () => {
                 </div>
 
                 {/* Footer Buttons */}
-                <div className="p-6 pt-0 flex items-center justify-between gap-4 border-t border-[#2A2A2A]/60">
+                <div className="p-4 sm:p-5 pt-3 flex items-center justify-between gap-4 border-t border-[#2A2A2A]/60">
                   <Link
                     to={`/services/${service.slug}`}
-                    className="text-xs font-oswald uppercase tracking-widest text-white hover:text-[#E50914] flex items-center gap-1.5 transition-colors"
+                    className="text-xs font-oswald uppercase tracking-wider text-white hover:text-[#E50914] flex items-center gap-1.5 transition-colors"
                   >
-                    <span>View Specifications & Process</span>
+                    <span>View Specifications</span>
                     <ArrowRight className="w-3.5 h-3.5 text-[#E50914]" />
                   </Link>
 
                   {service.checkoutEnabled ? (
                     <Link
                       to="/order/music"
-                      className="btn-cinematic-red text-xs py-2 px-5"
+                      className="btn-cinematic-red text-xs py-1.5 px-4"
                     >
                       Book Now
                     </Link>
                   ) : (
                     <Link
                       to={`/services/${service.slug}#quote`}
-                      className="btn-cinematic text-xs py-2 px-5"
+                      className="btn-cinematic text-xs py-1.5 px-4"
                     >
                       Get Quote
                     </Link>
