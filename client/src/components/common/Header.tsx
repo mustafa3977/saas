@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Globe, Menu, X, Play, User, Shield } from 'lucide-react';
+import { Globe, Menu, X, Play, User, LogOut } from 'lucide-react';
 import { SUPPORTED_LANGUAGES, setAppLanguage } from '../../i18n';
+import { useAuth } from '../../context/AuthContext';
 
 export const Header: React.FC = () => {
   const { t, i18n } = useTranslation();
   const location = useLocation();
+  const { isCustomerAuthenticated, logoutCustomer } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
 
@@ -121,31 +123,40 @@ export const Header: React.FC = () => {
 
           {/* Book Now Quick Link */}
           <Link
-            to="/order/music"
+            to={isCustomerAuthenticated ? '/order/music' : '/login'}
+            state={!isCustomerAuthenticated ? { from: '/order/music' } : undefined}
             className="flex items-center gap-1.5 text-xs uppercase font-oswald tracking-widest text-[#E50914] hover:text-[#FF1F2D] transition-colors font-semibold"
           >
             <Play className="w-3 h-3 fill-[#E50914]" />
             {t('nav.bookNow')}
           </Link>
 
-          {/* Portal / Sign In */}
-          <Link
-            to="/portal"
-            className="flex items-center gap-1.5 text-xs uppercase font-oswald tracking-widest text-[#B5B5B5] hover:text-white transition-colors"
-          >
-            <User className="w-3.5 h-3.5" />
-            {t('nav.signIn')}
-          </Link>
-
-          {/* Admin Console */}
-          <Link
-            to="/admin"
-            className="flex items-center gap-1.5 text-xs uppercase font-oswald tracking-widest text-[#B48A3C] hover:text-[#E50914] transition-colors"
-            title="Studio Command Console"
-          >
-            <Shield className="w-3.5 h-3.5" />
-            Admin
-          </Link>
+          {/* Customer Auth Actions */}
+          {!isCustomerAuthenticated ? (
+            <>
+              <Link
+                to="/login"
+                className="flex items-center gap-1.5 text-xs uppercase font-oswald tracking-widest text-[#B5B5B5] hover:text-white transition-colors"
+              >
+                <User className="w-3.5 h-3.5" />
+                Login
+              </Link>
+              <Link
+                to="/signup"
+                className="flex items-center gap-1.5 text-xs uppercase font-oswald tracking-widest text-[#B5B5B5] hover:text-white transition-colors"
+              >
+                Sign Up
+              </Link>
+            </>
+          ) : (
+            <button
+              onClick={logoutCustomer}
+              className="flex items-center gap-1.5 text-xs uppercase font-oswald tracking-widest text-[#B5B5B5] hover:text-[#E50914] transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Logout
+            </button>
+          )}
 
           {/* Outlined Contact Us Button */}
           <Link to="/contact" className="btn-cinematic">
@@ -156,7 +167,8 @@ export const Header: React.FC = () => {
         {/* Mobile Hamburger Button */}
         <div className="flex items-center gap-3 lg:hidden">
           <Link
-            to="/order/music"
+            to={isCustomerAuthenticated ? '/order/music' : '/login'}
+            state={!isCustomerAuthenticated ? { from: '/order/music' } : undefined}
             className="bg-[#E50914] text-white text-[11px] font-oswald tracking-widest px-3 py-1.5 uppercase font-medium rounded-sm"
           >
             Book
@@ -220,22 +232,35 @@ export const Header: React.FC = () => {
               {t('buttons.contactUs')}
             </Link>
 
-            <Link
-              to="/portal"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-center font-oswald text-xs uppercase tracking-widest text-[#B5B5B5] py-2"
-            >
-              {t('nav.portal')} / {t('nav.signIn')}
-            </Link>
-
-            <Link
-              to="/admin"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-center font-oswald text-xs uppercase tracking-widest text-[#B48A3C] py-2 flex items-center justify-center gap-1.5"
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>Studio Admin Console</span>
-            </Link>
+            {!isCustomerAuthenticated ? (
+              <>
+                <Link
+                  to="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-center font-oswald text-xs uppercase tracking-widest text-[#B5B5B5] py-2 hover:text-white"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/signup"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-center font-oswald text-xs uppercase tracking-widest text-[#B5B5B5] py-2 hover:text-white"
+                >
+                  Sign Up
+                </Link>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  logoutCustomer();
+                  setMobileMenuOpen(false);
+                }}
+                className="text-center font-oswald text-xs uppercase tracking-widest text-[#B5B5B5] hover:text-[#E50914] py-2 flex items-center justify-center gap-1.5"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Logout</span>
+              </button>
+            )}
           </div>
         </div>
       )}

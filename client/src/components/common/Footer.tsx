@@ -2,8 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Phone, Mail, ArrowRight } from 'lucide-react';
 import { SERVICES_CATALOG } from '@legacypixels/shared';
+import { useAuth } from '../../context/AuthContext';
 
 export const Footer: React.FC = () => {
+  const { isCustomerAuthenticated } = useAuth();
   return (
     <footer className="bg-[#070707] border-t border-[#2A2A2A] text-white pt-16 pb-24 relative">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -186,7 +188,8 @@ export const Footer: React.FC = () => {
 
             <div className="pt-2">
               <Link
-                to="/order/music"
+                to={isCustomerAuthenticated ? '/order/music' : '/login'}
+                state={!isCustomerAuthenticated ? { from: '/order/music' } : undefined}
                 className="inline-flex items-center gap-2 bg-[#E50914] hover:bg-[#FF1F2D] text-white text-xs font-oswald uppercase tracking-widest px-5 py-2.5 rounded-sm transition-all"
               >
                 <span>Book a Project</span>

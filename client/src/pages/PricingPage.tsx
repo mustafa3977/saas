@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   Check,
   Clock,
@@ -92,6 +93,8 @@ const ADDONS = [
 ];
 
 export const PricingPage: React.FC = () => {
+  const { isCustomerAuthenticated } = useAuth();
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
       {/* Header */}
@@ -177,7 +180,8 @@ export const PricingPage: React.FC = () => {
 
                 <div>
                   <Link
-                    to={`/order/music?package=${tier.id}`}
+                    to={isCustomerAuthenticated ? `/order/music?package=${tier.id}` : '/login'}
+                    state={!isCustomerAuthenticated ? { from: `/order/music?package=${tier.id}` } : undefined}
                     className={`w-full text-center block py-3.5 text-xs uppercase font-oswald tracking-widest font-semibold transition-all rounded-sm ${
                       tier.isPopular
                         ? 'bg-[#E50914] text-white hover:bg-[#ff1f2d] shadow-[0_0_20px_rgba(229,9,20,0.4)]'

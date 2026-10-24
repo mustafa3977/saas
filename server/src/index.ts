@@ -2,11 +2,12 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmetImport from 'helmet';
 import rateLimitImport from 'express-rate-limit';
-
 import cookieParser from 'cookie-parser';
-
 import dotenv from 'dotenv';
 import { pino } from 'pino';
+import bcrypt from 'bcryptjs';
+import { z } from 'zod';
+
 import {
   SERVICES_CATALOG,
   STATS_DATA,
@@ -17,6 +18,23 @@ import {
   contactMessageSchema,
   createOrderDraftSchema,
 } from '@legacypixels/shared';
+
+import { query } from './db.js';
+import {
+  generateUserToken,
+  generateAdminToken,
+  requireAuth,
+  requireAdmin,
+} from './auth/jwt.js';
+import { verifyAdminPassword } from './auth/adminAuth.js';
+import {
+  getClientIp,
+  customerThrottleKey,
+  adminThrottleKey,
+  isThrottled,
+  recordFailedAttempt,
+  clearAttempts,
+} from './auth/throttle.js';
 
 dotenv.config();
 const helmet = (helmetImport as any).default ?? helmetImport;
@@ -37,12 +55,35 @@ const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 // Security middlewares
 app.use(helmet());
-app.use(
-  cors({
-    origin: [CLIENT_URL, 'http://localhost:5173', 'https://legacypixels.net'],
-    credentials: true,
-  })
-);
+
+const allowedOrigins = [
+  'https://legacypixels.net',
+  'https://www.legacypixels.net',
+  'http://localhost:5173',
+];
+if (CLIENT_URL && !allowedOrigins.includes(CLIENT_URL)) {
+  allowedOrigins.push(CLIENT_URL);
+}
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+    const cleanOrigin = origin.replace(/\/$/, '');
+    if (allowedOrigins.some((o) => o.replace(/\/$/, '') === cleanOrigin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  allowedHeaders: ['Authorization', 'Content-Type'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 app.use(cookieParser(process.env.COOKIE_SECRET || 'lp_cookie_secret_dev'));
 app.use(express.json({ limit: '1mb' }));
 
@@ -54,6 +95,22 @@ const apiLimiter = rateLimit({
 });
 app.use('/api', apiLimiter);
 
+// Zod schemas for Auth validation
+const registerSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+  email: z.string().trim().email('Invalid email address').toLowerCase(),
+  password: z.string().min(8, 'Password must be at least 8 characters long'),
+});
+
+const loginSchema = z.object({
+  email: z.string().trim().email('Invalid email address').toLowerCase(),
+  password: z.string().min(1, 'Password is required'),
+});
+
+const adminLoginSchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+});
+
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({
@@ -61,6 +118,243 @@ app.get('/api/health', (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     service: 'Legacy Pixels API',
     version: '1.0.0',
+  });
+});
+
+// --- Customer Auth Endpoints ---
+
+// POST /api/auth/register
+app.post('/api/auth/register', async (req: Request, res: Response) => {
+  try {
+    const parseResult = registerSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: parseResult.error.errors[0]?.message || 'Invalid input data',
+      });
+    }
+
+    const { name, email, password } = parseResult.data;
+    const ip = getClientIp(req);
+    const throttleKey = customerThrottleKey(email, ip);
+
+    // Throttling: max 5 failed attempts per email + IP per 10 minutes
+    const throttled = await isThrottled(throttleKey, 5, 10);
+    if (throttled) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many failed attempts. Please try again in 10 minutes.',
+      });
+    }
+
+    // Check duplicate email
+    const existingUsers = await query<{ id: number }>(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
+      [email]
+    );
+
+    if (existingUsers.length > 0) {
+      await recordFailedAttempt(throttleKey);
+      return res.status(400).json({
+        success: false,
+        error: 'An account with this email address already exists.',
+      });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Insert user (never accept role from client, default is standard customer)
+    const newUsers = await query<{ id: number; name: string; email: string }>(
+      'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email',
+      [name, email, passwordHash]
+    );
+
+    const newUser = newUsers[0];
+    await clearAttempts(throttleKey);
+
+    const token = generateUserToken(newUser.id);
+
+    return res.status(201).json({
+      success: true,
+      token,
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+      },
+    });
+  } catch (err: any) {
+    logger.error({ err }, 'Registration error');
+    return res.status(500).json({
+      success: false,
+      error: 'Registration failed. Please try again later.',
+    });
+  }
+});
+
+// POST /api/auth/login
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+  try {
+    const parseResult = loginSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email or password',
+      });
+    }
+
+    const { email, password } = parseResult.data;
+    const ip = getClientIp(req);
+    const throttleKey = customerThrottleKey(email, ip);
+
+    // Throttling: max 5 failed attempts per email + IP per 10 minutes
+    const throttled = await isThrottled(throttleKey, 5, 10);
+    if (throttled) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many failed attempts. Please try again in 10 minutes.',
+      });
+    }
+
+    const users = await query<{ id: number; name: string; email: string; password_hash: string }>(
+      'SELECT id, name, email, password_hash FROM users WHERE LOWER(email) = LOWER($1)',
+      [email]
+    );
+
+    if (users.length === 0) {
+      await recordFailedAttempt(throttleKey);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password',
+      });
+    }
+
+    const user = users[0];
+    const passwordValid = await bcrypt.compare(password, user.password_hash);
+    if (!passwordValid) {
+      await recordFailedAttempt(throttleKey);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password',
+      });
+    }
+
+    await clearAttempts(throttleKey);
+
+    const token = generateUserToken(user.id);
+
+    return res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      },
+    });
+  } catch (err: any) {
+    logger.error({ err }, 'Login error');
+    return res.status(500).json({
+      success: false,
+      error: 'Login failed. Please try again later.',
+    });
+  }
+});
+
+// GET /api/auth/me
+app.get('/api/auth/me', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const users = await query<{ id: number; name: string; email: string; created_at: string }>(
+      'SELECT id, name, email, created_at FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    const user = users[0];
+    return res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        createdAt: user.created_at,
+      },
+    });
+  } catch (err: any) {
+    logger.error({ err }, 'Auth me error');
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve profile',
+    });
+  }
+});
+
+// --- Admin Endpoints (Password only, no database for credentials) ---
+
+// POST /api/admin/login
+app.post('/api/admin/login', async (req: Request, res: Response) => {
+  try {
+    const parseResult = adminLoginSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password is required',
+      });
+    }
+
+    const { password } = parseResult.data;
+    const ip = getClientIp(req);
+    const throttleKey = adminThrottleKey(ip);
+
+    // Throttling: 5 failed attempts per IP per 15 minutes, then lock for 15 minutes
+    const throttled = await isThrottled(throttleKey, 5, 15);
+    if (throttled) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many failed attempts. Locked for 15 minutes.',
+      });
+    }
+
+    const isValid = verifyAdminPassword(password);
+    if (!isValid) {
+      await recordFailedAttempt(throttleKey);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials',
+      });
+    }
+
+    await clearAttempts(throttleKey);
+
+    const token = generateAdminToken();
+
+    return res.json({
+      success: true,
+      token,
+      role: 'admin',
+    });
+  } catch (err: any) {
+    logger.error({ err }, 'Admin login error');
+    return res.status(500).json({
+      success: false,
+      error: 'Admin login failed',
+    });
+  }
+});
+
+// GET /api/admin/me
+app.get('/api/admin/me', requireAdmin, (req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    role: 'admin',
   });
 });
 
@@ -104,12 +398,11 @@ app.get('/api/blog/:slug', (req: Request, res: Response) => {
   res.json({ success: true, data: post });
 });
 
-// Quote Leads (For the 7 services where checkoutEnabled is false)
+// Quote Leads (Stays public)
 app.post('/api/leads', (req: Request, res: Response) => {
   try {
     const validatedData = quoteLeadSchema.parse(req.body);
     logger.info({ lead: validatedData }, 'New Quote Lead Received');
-    // In later phases, save to MongoDB collection and enqueue notification email
     return res.status(201).json({
       success: true,
       message: 'Thank you for your project brief. A producer will contact you within 24 hours.',
@@ -120,7 +413,7 @@ app.post('/api/leads', (req: Request, res: Response) => {
   }
 });
 
-// Contact Form Message
+// Contact Form Message (Stays public)
 app.post('/api/contact', (req: Request, res: Response) => {
   try {
     const validatedData = contactMessageSchema.parse(req.body);
@@ -134,13 +427,26 @@ app.post('/api/contact', (req: Request, res: Response) => {
   }
 });
 
-// Draft Order Initialization (Phase 2 & Phase 5 support)
-app.post('/api/orders/draft', (req: Request, res: Response) => {
+// Draft Order Initialization - Requires Customer Auth
+app.post('/api/orders/draft', requireAuth, async (req: Request, res: Response) => {
   try {
     const validatedData = createOrderDraftSchema.parse(req.body);
     const orderNumber = `LP-2026-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    logger.info({ orderNumber, service: validatedData.serviceSlug }, 'Order Draft Created');
+    logger.info({ orderNumber, service: validatedData.serviceSlug, userId: req.user?.id }, 'Order Draft Created');
+
+    // Save order linked to user
+    await query(
+      `INSERT INTO orders (user_id, order_number, service_slug, payload, status)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        req.user?.id,
+        orderNumber,
+        validatedData.serviceSlug,
+        JSON.stringify(validatedData),
+        'draft',
+      ]
+    );
 
     return res.status(201).json({
       success: true,

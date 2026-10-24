@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../lib/api';
 import {
   SERVICES_CATALOG,
   MUSIC_OCCASIONS,
@@ -185,6 +187,12 @@ const ALL_WORLD_LANGUAGES = [
 export const OrderWizardPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { isCustomerAuthenticated } = useAuth();
+
+  if (!isCustomerAuthenticated) {
+    return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />;
+  }
 
   const musicService = SERVICES_CATALOG.find((s) => s.slug === 'music') || SERVICES_CATALOG[0];
   const initialPackageId = searchParams.get('package') || 'pkg-cinematic-song';
@@ -347,7 +355,7 @@ export const OrderWizardPage: React.FC = () => {
     };
 
     try {
-      const response = await fetch('/api/orders/draft', {
+      const response = await apiFetch('/api/orders/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

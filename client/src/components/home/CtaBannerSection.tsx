@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Sparkles } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export const CtaBannerSection: React.FC = () => {
+  const { isCustomerAuthenticated } = useAuth();
   return (
     <section className="relative py-20 sm:py-24 bg-[#0d0d0d] overflow-hidden border-b border-[#2A2A2A]">
       <div className="absolute inset-0 bg-radial-gradient from-[#E50914]/15 via-transparent to-transparent pointer-events-none" />
@@ -22,7 +24,8 @@ export const CtaBannerSection: React.FC = () => {
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
-            to="/order/music"
+            to={isCustomerAuthenticated ? '/order/music' : '/login'}
+            state={!isCustomerAuthenticated ? { from: '/order/music' } : undefined}
             className="btn-cinematic-red w-full sm:w-auto"
           >
             ORDER A CUSTOM SONG ($29+)

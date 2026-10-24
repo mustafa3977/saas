@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../lib/api';
 import {
   SERVICES_CATALOG,
   quoteLeadSchema,
@@ -23,6 +25,7 @@ import { VideoModal } from '../components/common/VideoModal';
 export const ServiceDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const { isCustomerAuthenticated } = useAuth();
 
   const service = SERVICES_CATALOG.find((s) => s.slug === slug) || SERVICES_CATALOG[0];
 
@@ -63,7 +66,7 @@ export const ServiceDetailPage: React.FC = () => {
 
     try {
       setQuoteSubmitting(true);
-      const res = await fetch('/api/leads', {
+      const res = await apiFetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(validation.data),
@@ -132,7 +135,8 @@ export const ServiceDetailPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-4">
             {service.checkoutEnabled ? (
               <Link
-                to={`/order/${service.slug}`}
+                to={isCustomerAuthenticated ? `/order/${service.slug}` : '/login'}
+                state={!isCustomerAuthenticated ? { from: `/order/${service.slug}` } : undefined}
                 className="btn-cinematic-red text-sm"
               >
                 BOOK CUSTOM PACKAGE (${(service.startingPriceCents / 100).toFixed(0)}+)

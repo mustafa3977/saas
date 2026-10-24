@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -190,6 +191,18 @@ const PRODUCERS = [
 ];
 
 export const AdminDashboardPage: React.FC = () => {
+  const { isCustomerAuthenticated, isAdminAuthenticated, logoutAdmin } = useAuth();
+
+  // A logged-in customer who opens an admin URL is redirected to the home page
+  if (isCustomerAuthenticated && !isAdminAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+
+  // With no valid admin session, redirect to /admin/login
+  if (!isAdminAuthenticated) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
   const [activeTab, setActiveTab] = useState<
     'overview' | 'orders' | 'leads' | 'services' | 'team' | 'financials' | 'system'
   >('overview');
@@ -305,6 +318,13 @@ export const AdminDashboardPage: React.FC = () => {
             >
               Public Site →
             </Link>
+
+            <button
+              onClick={() => logoutAdmin()}
+              className="text-xs font-oswald uppercase tracking-wider text-[#E50914] hover:text-[#FF1F2D] transition-colors font-semibold"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </header>
