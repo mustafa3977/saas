@@ -90,3 +90,44 @@ export const contactMessageSchema = z.object({
   subject: z.string().min(3, 'Subject is required'),
   message: z.string().min(10, 'Message must be at least 10 characters'),
 });
+
+export const orderStatusSchema = z.enum([
+  'pending',
+  'confirmed',
+  'in_production',
+  'quality_review',
+  'customer_review',
+  'completed',
+  'cancelled',
+]);
+
+export const createOrderSchema = z.object({
+  serviceSlug: z.string().min(1),
+  packageId: z.string().min(1),
+  item: z.object({
+    packageId: z.string().min(1),
+    packageName: z.string().optional(),
+    fastDelivery: z.boolean().default(false),
+    additionalRevisionsCount: z.number().int().nonnegative().default(0),
+    addons: z
+      .array(
+        z.object({
+          addonId: z.string(),
+          name: z.string().optional(),
+          priceCents: z.number().optional(),
+        })
+      )
+      .default([]),
+  }),
+  brief: z.record(z.any()),
+  customer: z.object({
+    name: z.string().min(1, 'Name is required'),
+    email: z.string().email('Valid email is required'),
+    phone: z.string().optional(),
+    agreedToTerms: z.boolean().optional(),
+    agreedToRights: z.boolean().optional(),
+    optInMarketing: z.boolean().optional(),
+  }),
+  notes: z.string().optional(),
+});
+

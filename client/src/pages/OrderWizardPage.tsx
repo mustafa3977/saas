@@ -25,6 +25,7 @@ import {
   Volume2,
 } from 'lucide-react';
 import { SectionHeader } from '../components/common/SectionHeader';
+import { GoogleSignInButton } from '../components/common/GoogleSignInButton';
 
 const MUSIC_GENRES = [
   'Cinematic Pop',
@@ -242,13 +243,29 @@ export const OrderWizardPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Step 4 State: Final Order confirmation
+    // Step 4 State: Final Order confirmation
   const [confirmedOrder, setConfirmedOrder] = useState<{
     orderNumber: string;
     totalCents: number;
     packageName: string;
     deliveryDate: string;
   } | null>(null);
+
+  // Pre-fill customer details from profile if available
+  useEffect(() => {
+    apiFetch('/api/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.user) {
+          setCustomer((prev) => ({
+            ...prev,
+            name: prev.name || data.user.name || '',
+            email: prev.email || data.user.email || '',
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const selectedPackage =
     musicService.packages.find((p) => p.id === selectedPackageId) || musicService.packages[1];
@@ -355,6 +372,7 @@ export const OrderWizardPage: React.FC = () => {
     };
 
     try {
+      // 1. Create order draft
       const response = await apiFetch('/api/orders/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -362,7 +380,21 @@ export const OrderWizardPage: React.FC = () => {
       });
 
       const data = await response.json();
-      const orderNumber = data.orderNumber || `LP-2026-${Math.floor(100000 + Math.random() * 900000)}`;
+      if (!response.ok || !data.success || !data.orderNumber) {
+        throw new Error(data.error || 'Failed to create order draft on the server');
+      }
+
+      const realOrderNumber = data.orderNumber;
+
+      // 2. Submit the order to move status from 'draft' to 'submitted'
+      const submitResponse = await apiFetch(`/api/orders/${realOrderNumber}/submit`, {
+        method: 'POST',
+      });
+
+      const submitData = await submitResponse.json();
+      if (!submitResponse.ok || !submitData.success) {
+        throw new Error(submitData.error || 'Failed to submit order');
+      }
 
       // Calculate estimated delivery date
       const days = fastDeliverySelected ? selectedPackage.fastDeliveryDays : selectedPackage.deliveryDays;
@@ -377,7 +409,7 @@ export const OrderWizardPage: React.FC = () => {
       // Save to localStorage for demo Client Portal reflection!
       const existingOrders = JSON.parse(localStorage.getItem('lp_orders') || '[]');
       const newOrderRecord = {
-        publicNumber: orderNumber,
+        publicNumber: realOrderNumber,
         packageName: selectedPackage.name.en,
         recipientName: brief.recipientName,
         genre: brief.genre,
@@ -385,7 +417,7 @@ export const OrderWizardPage: React.FC = () => {
         story: brief.storyDetails,
         totalCents,
         paymentStatus: 'paid',
-        fulfillmentStatus: 'IN_PRODUCTION',
+        fulfillmentStatus: 'SUBMITTED',
         createdAt: new Date().toISOString(),
         estimatedDeliveryDate: deliveryDateStr,
       };
@@ -393,7 +425,7 @@ export const OrderWizardPage: React.FC = () => {
       localStorage.setItem('lp_orders', JSON.stringify(existingOrders));
 
       setConfirmedOrder({
-        orderNumber,
+        orderNumber: realOrderNumber,
         totalCents,
         packageName: selectedPackage.name.en,
         deliveryDate: deliveryDateStr,
@@ -402,15 +434,7 @@ export const OrderWizardPage: React.FC = () => {
       setCurrentStep(4);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
-      // Offline fallback
-      const orderNumber = `LP-2026-${Math.floor(100000 + Math.random() * 900000)}`;
-      setConfirmedOrder({
-        orderNumber,
-        totalCents,
-        packageName: selectedPackage.name.en,
-        deliveryDate: 'Within 3-5 Days',
-      });
-      setCurrentStep(4);
+      setErrorMessage(err.message || 'An error occurred while placing your order. Please try again.');
     } finally {
       setIsProcessing(false);
     }

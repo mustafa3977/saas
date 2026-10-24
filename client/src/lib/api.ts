@@ -32,8 +32,8 @@ export async function apiFetch(endpoint: string, options: ApiFetchOptions = {}):
     headers,
   });
 
-  // Clear session on 401 Unauthorized
-  if (response.status === 401) {
+  // Clear session on 401 Unauthorized or 403 Forbidden for admin
+  if (response.status === 401 || (isAdminRequest && response.status === 403)) {
     if (isAdminRequest) {
       localStorage.removeItem(ADMIN_TOKEN_KEY);
       window.dispatchEvent(new CustomEvent('lp:admin_session_expired'));
@@ -53,6 +53,12 @@ export const api = {
     apiFetch(endpoint, {
       ...options,
       method: 'POST',
+      body: body !== undefined ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
+    }),
+  patch: (endpoint: string, body?: any, options?: ApiFetchOptions) =>
+    apiFetch(endpoint, {
+      ...options,
+      method: 'PATCH',
       body: body !== undefined ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
     }),
   put: (endpoint: string, body?: any, options?: ApiFetchOptions) =>

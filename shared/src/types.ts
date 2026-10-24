@@ -19,6 +19,15 @@ export type ServiceSlug =
   | 'livestream-production'
   | 'photography-social-content';
 
+export type OrderStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'in_production'
+  | 'quality_review'
+  | 'customer_review'
+  | 'completed'
+  | 'cancelled';
+
 export type FulfillmentStatus =
   | 'DRAFT'
   | 'AWAITING_BRIEF'

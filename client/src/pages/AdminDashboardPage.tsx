@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../lib/api';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -10,33 +11,28 @@ import {
   FileText,
   Activity,
   Search,
-  Filter,
   CheckCircle2,
   Clock,
   AlertTriangle,
   RotateCcw,
   Eye,
-  Edit,
-  Trash2,
   ArrowUpRight,
-  TrendingUp,
-  Download,
   Mail,
   Phone,
   Shield,
-  Server,
   Sparkles,
   ExternalLink,
-  ChevronRight,
-  Plus,
   RefreshCw,
+  MessageSquare,
+  X,
 } from 'lucide-react';
-import { SERVICES_CATALOG, FulfillmentStatus, PaymentStatus } from '@legacypixels/shared';
+import { SERVICES_CATALOG } from '@legacypixels/shared';
 
 interface AdminOrder {
   id: string;
   orderNumber: string;
   service: string;
+  serviceSlug?: string;
   packageName: string;
   recipientName: string;
   customerName: string;
@@ -44,13 +40,16 @@ interface AdminOrder {
   customerPhone?: string;
   assignedProducer: string;
   totalAmount: number;
-  paymentStatus: PaymentStatus;
-  fulfillmentStatus: FulfillmentStatus;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+  status: string;
   createdAt: string;
+  updatedAt?: string;
   deliveryDate: string;
   storyBrief: string;
   genre: string;
   mood: string;
+  payload?: any;
 }
 
 interface AdminLead {
@@ -59,128 +58,43 @@ interface AdminLead {
   email: string;
   phone?: string;
   service: string;
+  serviceSlug?: string;
   budget: string;
   timeline: string;
   message: string;
-  status: 'NEW' | 'CONTACTED' | 'PROPOSAL_SENT' | 'CONVERTED' | 'ARCHIVED';
+  status: 'new' | 'contacted' | 'closed' | string;
+  createdAt: string;
+  payload?: any;
+}
+
+interface AdminMessage {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  status: 'new' | 'contacted' | 'closed' | string;
   createdAt: string;
 }
 
-const INITIAL_ORDERS: AdminOrder[] = [
-  {
-    id: 'ord-1',
-    orderNumber: 'LP-2026-881920',
-    service: 'Music & Personalized Songs',
-    packageName: 'Cinematic Song (Flagship)',
-    recipientName: 'Layla & Zayd',
-    customerName: 'Zayd Al-Fassi',
-    customerEmail: 'zayd.alfassi@example.com',
-    customerPhone: '+44 7405 593913',
-    assignedProducer: 'Elena Rostova (Lead Composer)',
-    totalAmount: 68,
-    paymentStatus: 'paid',
-    fulfillmentStatus: 'CUSTOMER_REVIEW',
-    createdAt: '2026-10-14',
-    deliveryDate: '2026-10-19',
-    storyBrief: 'Met in Lake Como in autumn 2018 under a café awning during rain. First dance at wedding.',
-    genre: 'Cinematic Pop & Orchestral Strings',
-    mood: 'Romantic & Intimate',
-  },
-  {
-    id: 'ord-2',
-    orderNumber: 'LP-2026-319042',
-    service: 'Music & Personalized Songs',
-    packageName: 'Personal Song',
-    recipientName: 'Marcus Vance Sr.',
-    customerName: 'Marcus Vance Jr.',
-    customerEmail: 'mvance@example.com',
-    customerPhone: '+1 415 555 2671',
-    assignedProducer: 'David Thorne (Acoustic Arranger)',
-    totalAmount: 29,
-    paymentStatus: 'paid',
-    fulfillmentStatus: 'IN_PRODUCTION',
-    createdAt: '2026-10-17',
-    deliveryDate: '2026-10-22',
-    storyBrief: 'Celebrating 60th birthday, father of three who built the family woodworking workshop.',
-    genre: 'Acoustic Folk Ballad',
-    mood: 'Heartwarming & Emotional',
-  },
-  {
-    id: 'ord-3',
-    orderNumber: 'LP-2026-559103',
-    service: 'Music & Personalized Songs',
-    packageName: 'Signature Studio Anthem',
-    recipientName: 'Aura Luxury Group',
-    customerName: 'Sophie Chen',
-    customerEmail: 'schen@auraluxury.ch',
-    customerPhone: '+41 22 819 0044',
-    assignedProducer: 'Elena Rostova & Live Strings Section',
-    totalAmount: 124,
-    paymentStatus: 'paid',
-    fulfillmentStatus: 'QUALITY_REVIEW',
-    createdAt: '2026-10-15',
-    deliveryDate: '2026-10-20',
-    storyBrief: 'Brand theme celebration for global flagship opening in Geneva. Stems and 4K lyric video included.',
-    genre: 'Orchestral Cinematic',
-    mood: 'Epic & Grandiose',
-  },
-  {
-    id: 'ord-4',
-    orderNumber: 'LP-2026-110294',
-    service: 'Music & Personalized Songs',
-    packageName: 'Cinematic Song',
-    recipientName: 'Amina & Tariq',
-    customerName: 'Amina Siddiqui',
-    customerEmail: 'amina.s@example.com',
-    assignedProducer: 'Farhan Vance',
-    totalAmount: 59,
-    paymentStatus: 'paid',
-    fulfillmentStatus: 'COMPLETED',
-    createdAt: '2026-10-08',
-    deliveryDate: '2026-10-13',
-    storyBrief: '10th Wedding Anniversary milestone, bilingual English and Urdu acoustic ballad.',
-    genre: 'Urdu Ghazal / Cinematic Fusion',
-    mood: 'Nostalgic & Reflective',
-  },
-];
+interface AdminStats {
+  totalOrders: number;
+  ordersInProduction: number;
+  newQuoteLeads: number;
+  newMessages: number;
+  totalCustomers: number;
+  grossBookings: number | null;
+  csat: number | null;
+}
 
-const INITIAL_LEADS: AdminLead[] = [
-  {
-    id: 'lead-101',
-    name: 'Julian Henderson',
-    email: 'j.henderson@solisfilm.com',
-    phone: '+44 20 7946 0192',
-    service: 'Movies & Narrative Cinema',
-    budget: '$15,000 - $50,000',
-    timeline: 'Within 2-4 weeks',
-    message: 'Looking for anamorphic 8K RED crew and color grading for a 20-minute dramatic short film in Scotland.',
-    status: 'NEW',
-    createdAt: '2026-10-18 14:20',
-  },
-  {
-    id: 'lead-102',
-    name: 'Camilla Rossi',
-    email: 'crossi@voguemilano.it',
-    phone: '+39 02 8739 1100',
-    service: 'Ads & Motion Graphics',
-    budget: '$5,000 - $15,000',
-    timeline: 'Urgent (Within 48-72 Hours)',
-    message: 'High-speed macro campaign for luxury cosmetics line. Need 3x 15s Instagram Reels & 1x 45s brand anthem.',
-    status: 'PROPOSAL_SENT',
-    createdAt: '2026-10-17 09:15',
-  },
-  {
-    id: 'lead-103',
-    name: 'Dr. Hamza Malik',
-    email: 'hamza@apexsummit.ae',
-    phone: '+971 50 123 4567',
-    service: 'Livestream Production',
-    budget: '$5,000 - $15,000',
-    timeline: '1-3 Months',
-    message: 'Multi-camera broadcast production for 3-day tech leadership summit at Dubai World Trade Centre.',
-    status: 'CONTACTED',
-    createdAt: '2026-10-16 17:40',
-  },
+const ORDER_STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'submitted', label: 'Submitted' },
+  { value: 'in_production', label: 'In Production' },
+  { value: 'quality_review', label: 'Quality Review' },
+  { value: 'customer_review', label: 'Customer Review' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 const PRODUCERS = [
@@ -191,6 +105,7 @@ const PRODUCERS = [
 ];
 
 export const AdminDashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const { isCustomerAuthenticated, isAdminAuthenticated, logoutAdmin } = useAuth();
 
   // A logged-in customer who opens an admin URL is redirected to the home page
@@ -204,74 +119,255 @@ export const AdminDashboardPage: React.FC = () => {
   }
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'orders' | 'leads' | 'services' | 'team' | 'financials' | 'system'
+    'overview' | 'orders' | 'leads' | 'messages' | 'services' | 'team' | 'financials' | 'system'
   >('overview');
 
-  const [orders, setOrders] = useState<AdminOrder[]>(INITIAL_ORDERS);
-  const [leads, setLeads] = useState<AdminLead[]>(INITIAL_LEADS);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [leads, setLeads] = useState<AdminLead[]>([]);
+  const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isHealthOk, setIsHealthOk] = useState<boolean | null>(null);
+
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
+  const [selectedLead, setSelectedLead] = useState<AdminLead | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<AdminMessage | null>(null);
+
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
-  // Load any orders created by the user from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('lp_orders');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const userOrders: AdminOrder[] = parsed.map((p: any, idx: number) => ({
-            id: `usr-ord-${idx}`,
-            orderNumber: p.publicNumber || `LP-2026-${Math.floor(100000 + Math.random() * 900000)}`,
-            service: 'Music & Personalized Songs',
-            packageName: p.packageName || 'Cinematic Song',
-            recipientName: p.recipientName || 'Valued Patron',
-            customerName: 'Online Customer',
-            customerEmail: 'customer@legacypixels.net',
-            assignedProducer: 'Elena Rostova',
-            totalAmount: (p.totalCents || 5900) / 100,
-            paymentStatus: (p.paymentStatus as PaymentStatus) || 'paid',
-            fulfillmentStatus: (p.fulfillmentStatus as FulfillmentStatus) || 'IN_PRODUCTION',
-            createdAt: p.createdAt ? p.createdAt.split('T')[0] : '2026-10-19',
-            deliveryDate: p.estimatedDeliveryDate || 'Within 4 Days',
-            storyBrief: p.story || 'Custom personalized song brief received.',
-            genre: p.genre || 'Cinematic Pop',
-            mood: p.mood || 'Romantic & Intimate',
-          }));
-          setOrders([...userOrders, ...INITIAL_ORDERS]);
-        }
-      } catch (e) {}
+  // Compute Gateway Hostname dynamically
+  const rawApiUrl = (import.meta.env.VITE_API_URL || '').trim();
+  let apiHostname = 'Same origin';
+  if (rawApiUrl) {
+    try {
+      const url = new URL(rawApiUrl.startsWith('http') ? rawApiUrl : `https://${rawApiUrl}`);
+      apiHostname = url.hostname;
+    } catch {
+      apiHostname = rawApiUrl.replace(/^https?:\/\//, '').split('/')[0];
     }
+  }
+
+  // Health check
+  useEffect(() => {
+    let isMounted = true;
+    const checkHealth = async () => {
+      try {
+        const res = await apiFetch('/api/health');
+        if (isMounted) setIsHealthOk(res.ok);
+      } catch {
+        if (isMounted) setIsHealthOk(false);
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
-  const handleUpdateOrderStatus = (orderId: string, newStatus: FulfillmentStatus) => {
-    const updated = orders.map((o) => (o.id === orderId ? { ...o, fulfillmentStatus: newStatus } : o));
-    setOrders(updated);
-    if (selectedOrder && selectedOrder.id === orderId) {
-      setSelectedOrder({ ...selectedOrder, fulfillmentStatus: newStatus });
+  // Fetch real data from Admin API
+  const fetchAllData = useCallback(async () => {
+    setIsLoading(true);
+    setFetchError(null);
+
+    try {
+      const [ordersRes, leadsRes, messagesRes, statsRes] = await Promise.all([
+        apiFetch('/api/admin/orders', { asAdmin: true }),
+        apiFetch('/api/admin/leads', { asAdmin: true }),
+        apiFetch('/api/admin/messages', { asAdmin: true }),
+        apiFetch('/api/admin/stats', { asAdmin: true }),
+      ]);
+
+      // If unauthorized or forbidden, clear admin session and redirect to /admin/login
+      if (
+        ordersRes.status === 401 || ordersRes.status === 403 ||
+        leadsRes.status === 401 || leadsRes.status === 403 ||
+        messagesRes.status === 401 || messagesRes.status === 403 ||
+        statsRes.status === 401 || statsRes.status === 403
+      ) {
+        logoutAdmin();
+        navigate('/admin/login', { replace: true });
+        return;
+      }
+
+      const [ordersData, leadsData, messagesData, statsData] = await Promise.all([
+        ordersRes.json(),
+        leadsRes.json(),
+        messagesRes.json(),
+        statsRes.json(),
+      ]);
+
+      if (ordersData?.success && Array.isArray(ordersData.data)) {
+        setOrders(ordersData.data);
+      }
+      if (leadsData?.success && Array.isArray(leadsData.data)) {
+        setLeads(leadsData.data);
+      }
+      if (messagesData?.success && Array.isArray(messagesData.data)) {
+        setMessages(messagesData.data);
+      }
+      if (statsData?.success && statsData.data) {
+        setStats(statsData.data);
+      }
+    } catch (err: any) {
+      setFetchError(err.message || 'Failed to load live data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [logoutAdmin, navigate]);
+
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
+  // Status update handlers
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+    try {
+      const res = await apiFetch(`/api/admin/orders/${orderId}/status`, {
+        asAdmin: true,
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus.toLowerCase() }),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        logoutAdmin();
+        navigate('/admin/login', { replace: true });
+        return;
+      }
+
+      if (res.ok) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? { ...o, status: newStatus, fulfillmentStatus: newStatus }
+              : o
+          )
+        );
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder((prev) =>
+            prev ? { ...prev, status: newStatus, fulfillmentStatus: newStatus } : null
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update order status', err);
     }
   };
 
-  const handleUpdateLeadStatus = (leadId: string, newStatus: AdminLead['status']) => {
-    const updated = leads.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l));
-    setLeads(updated);
+  const handleUpdateLeadStatus = async (leadId: string, newStatus: string) => {
+    try {
+      const res = await apiFetch(`/api/admin/leads/${leadId}/status`, {
+        asAdmin: true,
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus.toLowerCase() }),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        logoutAdmin();
+        navigate('/admin/login', { replace: true });
+        return;
+      }
+
+      if (res.ok) {
+        setLeads((prev) =>
+          prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l))
+        );
+        if (selectedLead && selectedLead.id === leadId) {
+          setSelectedLead((prev) => (prev ? { ...prev, status: newStatus } : null));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update lead status', err);
+    }
+  };
+
+  const handleUpdateMessageStatus = async (messageId: string, newStatus: string) => {
+    try {
+      const res = await apiFetch(`/api/admin/messages/${messageId}/status`, {
+        asAdmin: true,
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus.toLowerCase() }),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        logoutAdmin();
+        navigate('/admin/login', { replace: true });
+        return;
+      }
+
+      if (res.ok) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, status: newStatus } : m))
+        );
+        if (selectedMessage && selectedMessage.id === messageId) {
+          setSelectedMessage((prev) => (prev ? { ...prev, status: newStatus } : null));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update message status', err);
+    }
+  };
+
+  // Status badge styling helper
+  const getStatusBadge = (status: string) => {
+    const s = (status || '').toLowerCase();
+    switch (s) {
+      case 'completed':
+        return 'bg-emerald-950 text-emerald-300 border border-emerald-800';
+      case 'customer_review':
+        return 'bg-[#E50914]/20 text-[#E50914] border border-[#E50914]/40';
+      case 'quality_review':
+        return 'bg-purple-950 text-purple-300 border border-purple-800';
+      case 'in_production':
+        return 'bg-yellow-950 text-yellow-300 border border-yellow-800';
+      case 'submitted':
+        return 'bg-blue-950 text-blue-300 border border-blue-800';
+      case 'draft':
+        return 'bg-zinc-800 text-zinc-300 border border-zinc-700';
+      case 'cancelled':
+        return 'bg-red-950 text-red-400 border border-red-900';
+      case 'new':
+        return 'bg-[#E50914]/20 text-[#E50914] border border-[#E50914]/40 font-bold';
+      case 'contacted':
+        return 'bg-yellow-950 text-yellow-300 border border-yellow-800';
+      case 'closed':
+        return 'bg-zinc-800 text-zinc-400 border border-zinc-700';
+      default:
+        return 'bg-zinc-800 text-zinc-300 border border-zinc-700';
+    }
   };
 
   // Filtered orders
   const filteredOrders = orders.filter((o) => {
+    const query = orderSearchQuery.toLowerCase();
     const matchesSearch =
-      o.orderNumber.toLowerCase().includes(orderSearchQuery.toLowerCase()) ||
-      o.recipientName.toLowerCase().includes(orderSearchQuery.toLowerCase()) ||
-      o.customerName.toLowerCase().includes(orderSearchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'ALL' || o.fulfillmentStatus === statusFilter;
+      (o.orderNumber || '').toLowerCase().includes(query) ||
+      (o.recipientName || '').toLowerCase().includes(query) ||
+      (o.customerName || '').toLowerCase().includes(query) ||
+      (o.customerEmail || '').toLowerCase().includes(query);
+
+    const ordStatus = (o.status || o.fulfillmentStatus || '').toLowerCase();
+    const matchesStatus =
+      statusFilter === 'ALL' || ordStatus === statusFilter.toLowerCase();
+
     return matchesSearch && matchesStatus;
   });
 
-  // KPI Calculations
-  const totalRevenue = orders.reduce((acc, curr) => acc + curr.totalAmount, 0) + 14500;
-  const activeOrdersCount = orders.filter((o) => o.fulfillmentStatus !== 'COMPLETED').length;
-  const completedOrdersCount = orders.filter((o) => o.fulfillmentStatus === 'COMPLETED').length;
-  const newLeadsCount = leads.filter((l) => l.status === 'NEW').length;
+  const activeOrdersCount = orders.filter(
+    (o) => (o.status || o.fulfillmentStatus || '').toLowerCase() === 'in_production'
+  ).length;
+
+  const newLeadsCount = leads.filter(
+    (l) => (l.status || '').toLowerCase() === 'new'
+  ).length;
+
+  const newMessagesCount = messages.filter(
+    (m) => (m.status || '').toLowerCase() === 'new'
+  ).length;
 
   return (
     <div className="min-h-screen bg-[#070707] text-white flex flex-col">
@@ -300,9 +396,27 @@ export const AdminDashboardPage: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <div className="hidden md:flex items-center gap-2 text-xs font-poppins text-[#999] bg-[#141414] border border-[#2A2A2A] px-3 py-1.5 rounded-sm">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>API Gateway: <strong>http://localhost:5000</strong></span>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isHealthOk === true
+                    ? 'bg-emerald-500 animate-pulse'
+                    : isHealthOk === false
+                    ? 'bg-red-500'
+                    : 'bg-yellow-500'
+                }`}
+              />
+              <span>API Gateway: <strong>{apiHostname}</strong></span>
             </div>
+
+            <button
+              onClick={fetchAllData}
+              disabled={isLoading}
+              className="text-xs font-oswald uppercase tracking-wider text-[#B5B5B5] hover:text-white transition-colors flex items-center gap-1.5 bg-[#141414] border border-[#2A2A2A] px-2.5 py-1.5 rounded-sm"
+              title="Refresh live dashboard data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#E50914]' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
 
             <Link
               to="/portal"
@@ -379,9 +493,36 @@ export const AdminDashboardPage: React.FC = () => {
                 <FileText className="w-4 h-4" />
                 <span>Quote Inquiries</span>
               </div>
-              {newLeadsCount > 0 && (
+              {newLeadsCount > 0 ? (
                 <span className="text-[10px] bg-[#E50914] text-white px-2 py-0.5 rounded font-poppins font-bold animate-pulse">
                   {newLeadsCount} New
+                </span>
+              ) : (
+                <span className="text-[10px] bg-[#1a1a1a] text-[#777] px-2 py-0.5 rounded font-poppins">
+                  {leads.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('messages')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-sm text-xs font-oswald uppercase tracking-wider transition-all ${
+                activeTab === 'messages'
+                  ? 'bg-[#E50914] text-white font-bold shadow-[0_0_15px_rgba(229,9,20,0.3)]'
+                  : 'text-[#B5B5B5] hover:bg-[#181818] hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <MessageSquare className="w-4 h-4" />
+                <span>Contact Messages</span>
+              </div>
+              {newMessagesCount > 0 ? (
+                <span className="text-[10px] bg-[#E50914] text-white px-2 py-0.5 rounded font-poppins font-bold animate-pulse">
+                  {newMessagesCount} New
+                </span>
+              ) : (
+                <span className="text-[10px] bg-[#1a1a1a] text-[#777] px-2 py-0.5 rounded font-poppins">
+                  {messages.length}
                 </span>
               )}
             </button>
@@ -434,75 +575,79 @@ export const AdminDashboardPage: React.FC = () => {
               <span>System & Logs</span>
             </button>
           </div>
-
-          {/* Quick Stats Widget */}
-          <div className="bg-[#101010] border border-[#222222] rounded-sm p-4 space-y-3">
-            <span className="text-[10px] font-poppins uppercase tracking-widest text-[#B48A3C] block">
-              Direct Quick Action
-            </span>
-            <Link
-              to="/order/music"
-              className="w-full btn-cinematic-red text-[11px] py-2 flex items-center justify-center gap-1.5"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Simulate New Order</span>
-            </Link>
-          </div>
         </aside>
 
         {/* Right Main Admin Dashboard View */}
         <main className="flex-1 space-y-8 min-w-0">
+          {fetchError && (
+            <div className="bg-red-950/60 border border-red-800 text-red-300 p-4 rounded-sm text-xs font-poppins flex items-center justify-between">
+              <span>{fetchError}</span>
+              <button
+                onClick={fetchAllData}
+                className="underline text-white ml-3"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* TAB 1: OVERVIEW & KPIS */}
           {activeTab === 'overview' && (
             <div className="space-y-8">
-              {/* Top KPI Cards */}
+              {/* Top 4 KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* KPI 1: Gross Bookings MTD */}
                 <div className="bg-[#101010] border border-[#222222] p-5 rounded-sm flex flex-col justify-between">
                   <div className="flex items-center justify-between text-[#B5B5B5] mb-2">
                     <span className="text-xs font-poppins uppercase tracking-wider">Gross Bookings MTD</span>
                     <DollarSign className="w-4 h-4 text-[#E50914]" />
                   </div>
                   <div className="font-oswald text-3xl font-bold text-white mb-1">
-                    ${totalRevenue.toLocaleString()} <span className="text-xs font-poppins text-emerald-400 font-normal">+18.4%</span>
+                    —
                   </div>
-                  <span className="text-[10px] font-poppins text-[#777]">Stripe verified settlements</span>
+                  <span className="text-[10px] font-poppins text-[#777]">Not connected</span>
                 </div>
 
+                {/* KPI 2: Active Queue */}
                 <div className="bg-[#101010] border border-[#222222] p-5 rounded-sm flex flex-col justify-between">
                   <div className="flex items-center justify-between text-[#B5B5B5] mb-2">
                     <span className="text-xs font-poppins uppercase tracking-wider">Active Queue</span>
                     <ShoppingBag className="w-4 h-4 text-[#B48A3C]" />
                   </div>
                   <div className="font-oswald text-3xl font-bold text-white mb-1">
-                    {activeOrdersCount} Projects
+                    {stats ? stats.ordersInProduction : activeOrdersCount} Projects
                   </div>
-                  <span className="text-[10px] font-poppins text-[#777]">In production & QC review</span>
+                  <span className="text-[10px] font-poppins text-[#777]">
+                    In production ({stats ? stats.totalOrders : orders.length} total orders)
+                  </span>
                 </div>
 
+                {/* KPI 3: New Quote Leads */}
                 <div className="bg-[#101010] border border-[#222222] p-5 rounded-sm flex flex-col justify-between">
                   <div className="flex items-center justify-between text-[#B5B5B5] mb-2">
                     <span className="text-xs font-poppins uppercase tracking-wider">New Quote Leads</span>
                     <FileText className="w-4 h-4 text-[#E50914]" />
                   </div>
                   <div className="font-oswald text-3xl font-bold text-white mb-1">
-                    {newLeadsCount} Inquiries
+                    {stats ? stats.newQuoteLeads : newLeadsCount} Inquiries
                   </div>
                   <span className="text-[10px] font-poppins text-[#777]">Pending producer response</span>
                 </div>
 
+                {/* KPI 4: Studio CSAT */}
                 <div className="bg-[#101010] border border-[#222222] p-5 rounded-sm flex flex-col justify-between">
                   <div className="flex items-center justify-between text-[#B5B5B5] mb-2">
                     <span className="text-xs font-poppins uppercase tracking-wider">Studio CSAT</span>
                     <Sparkles className="w-4 h-4 text-emerald-400" />
                   </div>
-                  <div className="font-oswald text-3xl font-bold text-emerald-400 mb-1">
-                    4.98 / 5.0
+                  <div className="font-oswald text-3xl font-bold text-white mb-1">
+                    —
                   </div>
-                  <span className="text-[10px] font-poppins text-[#777]">120+ Verified Patron ratings</span>
+                  <span className="text-[10px] font-poppins text-[#777]">Not connected</span>
                 </div>
               </div>
 
-              {/* Recent Orders Snapshot */}
+              {/* Live Production Queue Snapshot */}
               <div className="bg-[#101010] border border-[#222222] rounded-sm p-6 space-y-4">
                 <div className="flex items-center justify-between border-b border-[#222222] pb-4">
                   <div className="flex items-center gap-2">
@@ -519,59 +664,71 @@ export const AdminDashboardPage: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-raleway">
-                    <thead className="bg-[#0A0A0A] text-[#777] font-poppins uppercase text-[10px] tracking-wider">
-                      <tr>
-                        <th className="p-3">Order Ref</th>
-                        <th className="p-3">Package / Recipient</th>
-                        <th className="p-3">Assigned Lead</th>
-                        <th className="p-3">Fulfillment Status</th>
-                        <th className="p-3">Due Date</th>
-                        <th className="p-3">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#1e1e1e]">
-                      {orders.slice(0, 4).map((ord) => (
-                        <tr key={ord.id} className="hover:bg-[#141414] transition-colors">
-                          <td className="p-3 font-oswald text-sm font-bold text-white tracking-wide">
-                            {ord.orderNumber}
-                          </td>
-                          <td className="p-3">
-                            <span className="font-medium text-white block">{ord.packageName}</span>
-                            <span className="text-[11px] text-[#B5B5B5]">For: {ord.recipientName}</span>
-                          </td>
-                          <td className="p-3 text-[#CCCCCC]">{ord.assignedProducer}</td>
-                          <td className="p-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-sm text-[10px] font-poppins uppercase font-bold ${
-                                ord.fulfillmentStatus === 'COMPLETED'
-                                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                                  : ord.fulfillmentStatus === 'CUSTOMER_REVIEW'
-                                  ? 'bg-[#E50914]/20 text-[#E50914] border border-[#E50914]/40'
-                                  : 'bg-yellow-950 text-yellow-300 border border-yellow-800'
-                              }`}
-                            >
-                              {ord.fulfillmentStatus.replace('_', ' ')}
-                            </span>
-                          </td>
-                          <td className="p-3 text-[#B48A3C] font-poppins">{ord.deliveryDate}</td>
-                          <td className="p-3">
-                            <button
-                              onClick={() => {
-                                setSelectedOrder(ord);
-                                setActiveTab('orders');
-                              }}
-                              className="text-[#E50914] hover:underline font-poppins text-xs font-medium"
-                            >
-                              Manage
-                            </button>
-                          </td>
+                {isLoading ? (
+                  <div className="py-12 flex flex-col items-center justify-center gap-3 text-xs text-[#999] font-poppins">
+                    <RefreshCw className="w-5 h-5 animate-spin text-[#E50914]" />
+                    <span>Loading real orders from Neon Postgres...</span>
+                  </div>
+                ) : orders.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-[#777] font-poppins">
+                    No orders yet
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs font-raleway">
+                      <thead className="bg-[#0A0A0A] text-[#777] font-poppins uppercase text-[10px] tracking-wider">
+                        <tr>
+                          <th className="p-3">Order Ref</th>
+                          <th className="p-3">Package / Recipient</th>
+                          <th className="p-3">Customer</th>
+                          <th className="p-3">Status</th>
+                          <th className="p-3">Date</th>
+                          <th className="p-3">Action</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-[#1e1e1e]">
+                        {orders.slice(0, 5).map((ord) => (
+                          <tr key={ord.id} className="hover:bg-[#141414] transition-colors">
+                            <td className="p-3 font-oswald text-sm font-bold text-white tracking-wide">
+                              {ord.orderNumber}
+                            </td>
+                            <td className="p-3">
+                              <span className="font-medium text-white block">{ord.packageName}</span>
+                              <span className="text-[11px] text-[#B5B5B5]">For: {ord.recipientName || 'Patron'}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className="text-white block">{ord.customerName}</span>
+                              <span className="text-[11px] text-[#777]">{ord.customerEmail}</span>
+                            </td>
+                            <td className="p-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-sm text-[10px] font-poppins uppercase font-bold ${getStatusBadge(
+                                  ord.status || ord.fulfillmentStatus
+                                )}`}
+                              >
+                                {(ord.status || ord.fulfillmentStatus || 'draft').replace('_', ' ')}
+                              </span>
+                            </td>
+                            <td className="p-3 text-[#B48A3C] font-poppins">
+                              {ord.createdAt ? ord.createdAt.split('T')[0] : '—'}
+                            </td>
+                            <td className="p-3">
+                              <button
+                                onClick={() => {
+                                  setSelectedOrder(ord);
+                                  setActiveTab('orders');
+                                }}
+                                className="text-[#E50914] hover:underline font-poppins text-xs font-medium"
+                              >
+                                Manage
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {/* Recent Incoming Leads */}
@@ -591,49 +748,58 @@ export const AdminDashboardPage: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {leads.slice(0, 3).map((lead) => (
-                    <div
-                      key={lead.id}
-                      className="p-4 bg-[#0a0a0a] border border-[#222222] rounded-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-oswald text-base uppercase font-bold text-white">
-                            {lead.name}
-                          </h4>
-                          <span className="text-[10px] font-poppins uppercase bg-[#E50914]/20 text-[#E50914] px-2 py-0.5 rounded-sm">
-                            {lead.service}
-                          </span>
+                {isLoading ? (
+                  <div className="py-8 flex flex-col items-center justify-center gap-2 text-xs text-[#999] font-poppins">
+                    <RefreshCw className="w-4 h-4 animate-spin text-[#E50914]" />
+                    <span>Loading quote inquiries...</span>
+                  </div>
+                ) : leads.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-[#777] font-poppins">
+                    No quote inquiries yet
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {leads.slice(0, 3).map((lead) => (
+                      <div
+                        key={lead.id}
+                        className="p-4 bg-[#0a0a0a] border border-[#222222] rounded-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-oswald text-base uppercase font-bold text-white">
+                              {lead.name}
+                            </h4>
+                            <span className="text-[10px] font-poppins uppercase bg-[#E50914]/20 text-[#E50914] px-2 py-0.5 rounded-sm">
+                              {lead.service}
+                            </span>
+                          </div>
+                          <p className="font-raleway text-xs text-[#B5B5B5] line-clamp-1">
+                            "{lead.message}"
+                          </p>
+                          <div className="flex items-center gap-4 text-[10px] font-poppins text-[#777] mt-1.5">
+                            <span>Budget: <strong className="text-white">{lead.budget}</strong></span>
+                            <span>•</span>
+                            <span>Timeline: {lead.timeline}</span>
+                            <span>•</span>
+                            <span>Email: {lead.email}</span>
+                          </div>
                         </div>
-                        <p className="font-raleway text-xs text-[#B5B5B5] line-clamp-1">
-                          "{lead.message}"
-                        </p>
-                        <div className="flex items-center gap-4 text-[10px] font-poppins text-[#777] mt-1.5">
-                          <span>Budget: <strong className="text-white">{lead.budget}</strong></span>
-                          <span>•</span>
-                          <span>Timeline: {lead.timeline}</span>
-                          <span>•</span>
-                          <span>Email: {lead.email}</span>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={lead.status}
-                          onChange={(e: any) => handleUpdateLeadStatus(lead.id, e.target.value)}
-                          className="bg-[#141414] border border-[#333] text-white text-[11px] font-poppins px-2 py-1 rounded-sm focus:outline-none"
-                        >
-                          <option value="NEW">NEW</option>
-                          <option value="CONTACTED">CONTACTED</option>
-                          <option value="PROPOSAL_SENT">PROPOSAL SENT</option>
-                          <option value="CONVERTED">CONVERTED</option>
-                          <option value="ARCHIVED">ARCHIVED</option>
-                        </select>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={(lead.status || 'new').toLowerCase()}
+                            onChange={(e) => handleUpdateLeadStatus(lead.id, e.target.value)}
+                            className="bg-[#141414] border border-[#333] text-white text-[11px] font-poppins px-2 py-1 rounded-sm focus:outline-none"
+                          >
+                            <option value="new">NEW</option>
+                            <option value="contacted">CONTACTED</option>
+                            <option value="closed">CLOSED</option>
+                          </select>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -669,11 +835,13 @@ export const AdminDashboardPage: React.FC = () => {
                     className="bg-[#101010] border border-[#222222] px-3 py-2 text-xs text-white rounded-sm focus:outline-none"
                   >
                     <option value="ALL">All Statuses</option>
-                    <option value="READY">Ready</option>
-                    <option value="IN_PRODUCTION">In Production</option>
-                    <option value="QUALITY_REVIEW">Quality Review</option>
-                    <option value="CUSTOMER_REVIEW">Customer Review</option>
-                    <option value="COMPLETED">Completed</option>
+                    <option value="draft">Draft</option>
+                    <option value="submitted">Submitted</option>
+                    <option value="in_production">In Production</option>
+                    <option value="quality_review">Quality Review</option>
+                    <option value="customer_review">Customer Review</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
               </div>
@@ -686,15 +854,23 @@ export const AdminDashboardPage: React.FC = () => {
                       <span className="font-oswald text-xl uppercase font-bold text-white">
                         Order Inspector: {selectedOrder.orderNumber}
                       </span>
-                      <span className="text-xs bg-[#E50914] text-white px-2 py-0.5 rounded font-poppins">
+                      <span className="text-xs bg-[#E50914] text-white px-2 py-0.5 rounded font-poppins font-semibold">
                         ${selectedOrder.totalAmount} USD
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-poppins uppercase font-bold ${getStatusBadge(
+                          selectedOrder.status || selectedOrder.fulfillmentStatus
+                        )}`}
+                      >
+                        {(selectedOrder.status || selectedOrder.fulfillmentStatus || 'draft').replace('_', ' ')}
                       </span>
                     </div>
                     <button
                       onClick={() => setSelectedOrder(null)}
-                      className="text-xs font-oswald uppercase text-[#B5B5B5] hover:text-white"
+                      className="text-xs font-oswald uppercase text-[#B5B5B5] hover:text-white flex items-center gap-1"
                     >
-                      Close Inspector ✕
+                      <X className="w-4 h-4" />
+                      <span>Close Inspector</span>
                     </button>
                   </div>
 
@@ -702,41 +878,76 @@ export const AdminDashboardPage: React.FC = () => {
                     <div>
                       <span className="text-[10px] font-poppins uppercase text-[#777] block">Patron & Contact</span>
                       <strong className="text-white block">{selectedOrder.customerName}</strong>
-                      <span className="text-[#B5B5B5]">{selectedOrder.customerEmail}</span>
+                      <span className="text-[#B5B5B5] block">{selectedOrder.customerEmail}</span>
+                      {selectedOrder.customerPhone && (
+                        <span className="text-[#777] block">{selectedOrder.customerPhone}</span>
+                      )}
                     </div>
                     <div>
                       <span className="text-[10px] font-poppins uppercase text-[#777] block">Recipient / Protagonist</span>
-                      <strong className="text-white block">{selectedOrder.recipientName}</strong>
-                      <span className="text-[#B48A3C]">{selectedOrder.genre} • {selectedOrder.mood}</span>
+                      <strong className="text-white block">{selectedOrder.recipientName || 'Patron'}</strong>
+                      <span className="text-[#B48A3C]">
+                        {selectedOrder.genre ? `${selectedOrder.genre} • ` : ''}{selectedOrder.mood || selectedOrder.packageName}
+                      </span>
                     </div>
                     <div>
-                      <span className="text-[10px] font-poppins uppercase text-[#777] block">Assigned Lead</span>
-                      <strong className="text-white block">{selectedOrder.assignedProducer}</strong>
-                      <span className="text-[#777]">Due: {selectedOrder.deliveryDate}</span>
+                      <span className="text-[10px] font-poppins uppercase text-[#777] block">Service & Created Date</span>
+                      <strong className="text-white block">{selectedOrder.packageName}</strong>
+                      <span className="text-[#777]">
+                        Created: {selectedOrder.createdAt ? selectedOrder.createdAt.split('T')[0] : '—'}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="bg-[#0A0A0A] p-4 rounded-sm border border-[#222222] text-xs font-raleway">
-                    <span className="text-[10px] font-poppins uppercase text-[#777] block mb-1">
-                      Creative Story Brief & Anecdotes:
-                    </span>
-                    <p className="text-[#CCCCCC] italic">"{selectedOrder.storyBrief}"</p>
-                  </div>
+                  {selectedOrder.storyBrief && (
+                    <div className="bg-[#0A0A0A] p-4 rounded-sm border border-[#222222] text-xs font-raleway">
+                      <span className="text-[10px] font-poppins uppercase text-[#777] block mb-1">
+                        Creative Story Brief & Details:
+                      </span>
+                      <p className="text-[#CCCCCC] italic">"{selectedOrder.storyBrief}"</p>
+                    </div>
+                  )}
+
+                  {/* Additional Payload Details if present */}
+                  {selectedOrder.payload && (
+                    <div className="bg-[#0A0A0A] p-4 rounded-sm border border-[#222222] text-xs font-raleway">
+                      <span className="text-[10px] font-poppins uppercase text-[#777] block mb-2">
+                        Complete Order Payload Spec:
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-[11px] text-[#A0A0A0]">
+                        {selectedOrder.payload.serviceSlug && (
+                          <div>Service Slug: <strong className="text-white">{selectedOrder.payload.serviceSlug}</strong></div>
+                        )}
+                        {selectedOrder.payload.brief?.occasion && (
+                          <div>Occasion: <strong className="text-white">{selectedOrder.payload.brief.occasion}</strong></div>
+                        )}
+                        {selectedOrder.payload.brief?.vocalPreference && (
+                          <div>Vocals: <strong className="text-white">{selectedOrder.payload.brief.vocalPreference}</strong></div>
+                        )}
+                        {selectedOrder.payload.brief?.songLanguage && (
+                          <div>Language: <strong className="text-white">{selectedOrder.payload.brief.songLanguage}</strong></div>
+                        )}
+                        {selectedOrder.payload.item?.fastDelivery && (
+                          <div className="text-emerald-400 font-bold">Fast Track 48-Hour Delivery Enabled</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#2A2A2A]">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-poppins text-[#B48A3C]">Change Production Stage:</span>
-                      {(['READY', 'IN_PRODUCTION', 'QUALITY_REVIEW', 'CUSTOMER_REVIEW', 'COMPLETED'] as FulfillmentStatus[]).map((st) => (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-poppins text-[#B48A3C]">Change Stage:</span>
+                      {ORDER_STATUS_OPTIONS.map((opt) => (
                         <button
-                          key={st}
-                          onClick={() => handleUpdateOrderStatus(selectedOrder.id, st)}
+                          key={opt.value}
+                          onClick={() => handleUpdateOrderStatus(selectedOrder.id, opt.value)}
                           className={`px-2.5 py-1 text-[10px] font-oswald uppercase rounded ${
-                            selectedOrder.fulfillmentStatus === st
+                            (selectedOrder.status || selectedOrder.fulfillmentStatus || '').toLowerCase() === opt.value
                               ? 'bg-[#E50914] text-white font-bold'
                               : 'bg-[#1c1c1c] text-[#999] hover:text-white'
                           }`}
                         >
-                          {st.replace('_', ' ')}
+                          {opt.label}
                         </button>
                       ))}
                     </div>
@@ -754,57 +965,68 @@ export const AdminDashboardPage: React.FC = () => {
 
               {/* Full Orders Table */}
               <div className="bg-[#101010] border border-[#222222] rounded-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-raleway">
-                    <thead className="bg-[#0A0A0A] text-[#777] font-poppins uppercase text-[10px] tracking-wider">
-                      <tr>
-                        <th className="p-4">Ref Number</th>
-                        <th className="p-4">Discipline & Package</th>
-                        <th className="p-4">Recipient</th>
-                        <th className="p-4">Customer Email</th>
-                        <th className="p-4">Amount</th>
-                        <th className="p-4">Current Stage</th>
-                        <th className="p-4">Target Delivery</th>
-                        <th className="p-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#1e1e1e]">
-                      {filteredOrders.map((ord) => (
-                        <tr key={ord.id} className="hover:bg-[#141414] transition-colors">
-                          <td className="p-4 font-oswald text-sm font-bold text-white tracking-wider">
-                            {ord.orderNumber}
-                          </td>
-                          <td className="p-4 font-medium text-white">{ord.packageName}</td>
-                          <td className="p-4 text-[#CCCCCC]">{ord.recipientName}</td>
-                          <td className="p-4 text-[#B5B5B5]">{ord.customerEmail}</td>
-                          <td className="p-4 font-oswald text-sm font-bold text-white">${ord.totalAmount}</td>
-                          <td className="p-4">
-                            <span
-                              className={`px-2.5 py-1 rounded-sm text-[10px] font-poppins uppercase font-bold inline-block ${
-                                ord.fulfillmentStatus === 'COMPLETED'
-                                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                                  : ord.fulfillmentStatus === 'CUSTOMER_REVIEW'
-                                  ? 'bg-[#E50914]/20 text-[#E50914] border border-[#E50914]/40'
-                                  : 'bg-yellow-950 text-yellow-300 border border-yellow-800'
-                              }`}
-                            >
-                              {ord.fulfillmentStatus.replace('_', ' ')}
-                            </span>
-                          </td>
-                          <td className="p-4 text-[#B48A3C] font-poppins">{ord.deliveryDate}</td>
-                          <td className="p-4 text-right">
-                            <button
-                              onClick={() => setSelectedOrder(ord)}
-                              className="btn-cinematic text-[11px] py-1 px-3"
-                            >
-                              Inspect
-                            </button>
-                          </td>
+                {isLoading ? (
+                  <div className="p-12 text-center text-xs text-[#999] font-poppins flex flex-col items-center justify-center gap-3">
+                    <RefreshCw className="w-6 h-6 animate-spin text-[#E50914]" />
+                    <span>Loading production queue from database...</span>
+                  </div>
+                ) : filteredOrders.length === 0 ? (
+                  <div className="p-12 text-center text-xs text-[#777] font-poppins">
+                    No orders yet
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs font-raleway">
+                      <thead className="bg-[#0A0A0A] text-[#777] font-poppins uppercase text-[10px] tracking-wider">
+                        <tr>
+                          <th className="p-4">Ref Number</th>
+                          <th className="p-4">Discipline & Package</th>
+                          <th className="p-4">Recipient</th>
+                          <th className="p-4">Customer Email</th>
+                          <th className="p-4">Amount</th>
+                          <th className="p-4">Current Stage</th>
+                          <th className="p-4">Created Date</th>
+                          <th className="p-4 text-right">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-[#1e1e1e]">
+                        {filteredOrders.map((ord) => (
+                          <tr key={ord.id} className="hover:bg-[#141414] transition-colors">
+                            <td className="p-4 font-oswald text-sm font-bold text-white tracking-wider">
+                              {ord.orderNumber}
+                            </td>
+                            <td className="p-4 font-medium text-white">{ord.packageName}</td>
+                            <td className="p-4 text-[#CCCCCC]">{ord.recipientName || 'Patron'}</td>
+                            <td className="p-4 text-[#B5B5B5]">{ord.customerEmail}</td>
+                            <td className="p-4 font-oswald text-sm font-bold text-white">
+                              ${ord.totalAmount}
+                            </td>
+                            <td className="p-4">
+                              <span
+                                className={`px-2.5 py-1 rounded-sm text-[10px] font-poppins uppercase font-bold inline-block ${getStatusBadge(
+                                  ord.status || ord.fulfillmentStatus
+                                )}`}
+                              >
+                                {(ord.status || ord.fulfillmentStatus || 'draft').replace('_', ' ')}
+                              </span>
+                            </td>
+                            <td className="p-4 text-[#B48A3C] font-poppins">
+                              {ord.createdAt ? ord.createdAt.split('T')[0] : '—'}
+                            </td>
+                            <td className="p-4 text-right">
+                              <button
+                                onClick={() => setSelectedOrder(ord)}
+                                className="btn-cinematic text-[11px] py-1 px-3"
+                              >
+                                Inspect
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -821,87 +1043,188 @@ export const AdminDashboardPage: React.FC = () => {
                 </p>
               </div>
 
-              <div className="space-y-4">
-                {leads.map((lead) => (
-                  <div
-                    key={lead.id}
-                    className="bg-[#101010] border border-[#222222] p-6 rounded-sm space-y-4 hover:border-[#E50914] transition-colors"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#222222] pb-3">
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <h3 className="font-oswald text-xl uppercase font-bold text-white">
-                            {lead.name}
-                          </h3>
-                          <span className="text-[10px] font-poppins uppercase bg-[#E50914] text-white px-2 py-0.5 rounded-sm font-semibold">
-                            {lead.service}
+              {isLoading ? (
+                <div className="p-12 text-center text-xs text-[#999] font-poppins flex flex-col items-center justify-center gap-3">
+                  <RefreshCw className="w-6 h-6 animate-spin text-[#E50914]" />
+                  <span>Loading quote inquiries from database...</span>
+                </div>
+              ) : leads.length === 0 ? (
+                <div className="p-12 text-center text-xs text-[#777] font-poppins bg-[#101010] border border-[#222222] rounded-sm">
+                  No quote inquiries yet
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {leads.map((lead) => (
+                    <div
+                      key={lead.id}
+                      className="bg-[#101010] border border-[#222222] p-6 rounded-sm space-y-4 hover:border-[#E50914] transition-colors"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#222222] pb-3">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-oswald text-xl uppercase font-bold text-white">
+                              {lead.name}
+                            </h3>
+                            <span className="text-[10px] font-poppins uppercase bg-[#E50914] text-white px-2 py-0.5 rounded-sm font-semibold">
+                              {lead.service}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-poppins uppercase font-bold ${getStatusBadge(
+                                lead.status
+                              )}`}
+                            >
+                              {lead.status}
+                            </span>
+                          </div>
+                          <span className="text-xs font-poppins text-[#777]">
+                            Received: {lead.createdAt ? lead.createdAt.split('T')[0] : '—'}
                           </span>
                         </div>
-                        <span className="text-xs font-poppins text-[#777]">Received: {lead.createdAt}</span>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-poppins text-[#B5B5B5]">Lead Status:</span>
+                          <select
+                            value={(lead.status || 'new').toLowerCase()}
+                            onChange={(e) => handleUpdateLeadStatus(lead.id, e.target.value)}
+                            className="bg-[#181818] border border-[#333] text-white text-xs font-poppins px-3 py-1.5 rounded-sm focus:outline-none"
+                          >
+                            <option value="new">NEW</option>
+                            <option value="contacted">CONTACTED</option>
+                            <option value="closed">CLOSED</option>
+                          </select>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-poppins text-[#B5B5B5]">Lead Status:</span>
-                        <select
-                          value={lead.status}
-                          onChange={(e: any) => handleUpdateLeadStatus(lead.id, e.target.value)}
-                          className="bg-[#181818] border border-[#333] text-white text-xs font-poppins px-3 py-1.5 rounded-sm focus:outline-none"
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-raleway">
+                        <div>
+                          <span className="text-[10px] font-poppins uppercase text-[#777] block">Direct Email</span>
+                          <a href={`mailto:${lead.email}`} className="text-white hover:text-[#E50914] flex items-center gap-1.5">
+                            <Mail className="w-3.5 h-3.5 text-[#E50914]" />
+                            {lead.email}
+                          </a>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-poppins uppercase text-[#777] block">Phone / WhatsApp</span>
+                          <span className="text-white flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-[#25D366]" />
+                            {lead.phone || 'N/A'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-poppins uppercase text-[#777] block">Budget & Timeline</span>
+                          <span className="text-[#B48A3C] font-semibold">{lead.budget}</span> • {lead.timeline}
+                        </div>
+                      </div>
+
+                      <div className="bg-[#0A0A0A] p-4 rounded-sm border border-[#222222]">
+                        <span className="text-[10px] font-poppins uppercase text-[#777] block mb-1">
+                          Client Scope & Vision:
+                        </span>
+                        <p className="text-xs font-raleway text-[#CCCCCC] leading-relaxed">
+                          "{lead.message}"
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-3 pt-2">
+                        <a
+                          href={`mailto:${lead.email}?subject=Legacy Pixels Production Proposal for ${lead.name}`}
+                          className="btn-cinematic-red text-xs py-1.5 px-4 flex items-center gap-1.5"
                         >
-                          <option value="NEW">NEW</option>
-                          <option value="CONTACTED">CONTACTED</option>
-                          <option value="PROPOSAL_SENT">PROPOSAL SENT</option>
-                          <option value="CONVERTED">CONVERTED</option>
-                          <option value="ARCHIVED">ARCHIVED</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-raleway">
-                      <div>
-                        <span className="text-[10px] font-poppins uppercase text-[#777] block">Direct Email</span>
-                        <a href={`mailto:${lead.email}`} className="text-white hover:text-[#E50914] flex items-center gap-1.5">
-                          <Mail className="w-3.5 h-3.5 text-[#E50914]" />
-                          {lead.email}
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>Reply with Studio Proposal</span>
                         </a>
                       </div>
-                      <div>
-                        <span className="text-[10px] font-poppins uppercase text-[#777] block">Phone / WhatsApp</span>
-                        <span className="text-white flex items-center gap-1.5">
-                          <Phone className="w-3.5 h-3.5 text-[#25D366]" />
-                          {lead.phone || 'N/A'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-poppins uppercase text-[#777] block">Budget & Timeline</span>
-                        <span className="text-[#B48A3C] font-semibold">{lead.budget}</span> • {lead.timeline}
-                      </div>
                     </div>
-
-                    <div className="bg-[#0A0A0A] p-4 rounded-sm border border-[#222222]">
-                      <span className="text-[10px] font-poppins uppercase text-[#777] block mb-1">
-                        Client Scope & Vision:
-                      </span>
-                      <p className="text-xs font-raleway text-[#CCCCCC] leading-relaxed">
-                        "{lead.message}"
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3 pt-2">
-                      <a
-                        href={`mailto:${lead.email}?subject=Legacy Pixels Production Proposal for ${lead.name}`}
-                        className="btn-cinematic-red text-xs py-1.5 px-4 flex items-center gap-1.5"
-                      >
-                        <Mail className="w-3.5 h-3.5" />
-                        <span>Reply with Studio Proposal</span>
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {/* TAB 4: SERVICES CATALOG & RATES */}
+          {/* TAB 4: CONTACT MESSAGES */}
+          {activeTab === 'messages' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="font-oswald text-2xl uppercase font-bold text-white tracking-wider">
+                  Patron Messages & Production Desk Inquiries ({messages.length})
+                </h2>
+                <p className="font-raleway text-xs text-[#B5B5B5]">
+                  Inbound correspondence received through the public contact desk (`/api/contact`).
+                </p>
+              </div>
+
+              {isLoading ? (
+                <div className="p-12 text-center text-xs text-[#999] font-poppins flex flex-col items-center justify-center gap-3">
+                  <RefreshCw className="w-6 h-6 animate-spin text-[#E50914]" />
+                  <span>Loading contact messages from database...</span>
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="p-12 text-center text-xs text-[#777] font-poppins bg-[#101010] border border-[#222222] rounded-sm">
+                  No contact messages yet
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className="bg-[#101010] border border-[#222222] p-6 rounded-sm space-y-4 hover:border-[#E50914] transition-colors"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#222222] pb-3">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-oswald text-lg uppercase font-bold text-white">
+                              {msg.subject}
+                            </h3>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-poppins uppercase font-bold ${getStatusBadge(
+                                msg.status
+                              )}`}
+                            >
+                              {msg.status}
+                            </span>
+                          </div>
+                          <span className="text-xs font-poppins text-[#777]">
+                            From: <strong className="text-white">{msg.name}</strong> ({msg.email}) • Received: {msg.createdAt ? msg.createdAt.split('T')[0] : '—'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-poppins text-[#B5B5B5]">Status:</span>
+                          <select
+                            value={(msg.status || 'new').toLowerCase()}
+                            onChange={(e) => handleUpdateMessageStatus(msg.id, e.target.value)}
+                            className="bg-[#181818] border border-[#333] text-white text-xs font-poppins px-3 py-1.5 rounded-sm focus:outline-none"
+                          >
+                            <option value="new">NEW</option>
+                            <option value="contacted">CONTACTED</option>
+                            <option value="closed">CLOSED</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#0A0A0A] p-4 rounded-sm border border-[#222222]">
+                        <p className="text-xs font-raleway text-[#CCCCCC] leading-relaxed whitespace-pre-wrap">
+                          {msg.message}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-3 pt-2">
+                        <a
+                          href={`mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject)}`}
+                          className="btn-cinematic-red text-xs py-1.5 px-4 flex items-center gap-1.5"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>Reply via Email</span>
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: SERVICES CATALOG & RATES */}
           {activeTab === 'services' && (
             <div className="space-y-6">
               <div>
@@ -973,7 +1296,7 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 5: TEAM & CREATIVE ROSTER */}
+          {/* TAB 6: TEAM & CREATIVE ROSTER */}
           {activeTab === 'team' && (
             <div className="space-y-6">
               <div>
@@ -1017,68 +1340,79 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 6: FINANCIAL LEDGER */}
+          {/* TAB 7: FINANCIAL LEDGER */}
           {activeTab === 'financials' && (
             <div className="space-y-6">
               <div>
                 <h2 className="font-oswald text-2xl uppercase font-bold text-white tracking-wider">
-                  Financial Ledger & Stripe Settlements
+                  Financial Ledger & Settlements
                 </h2>
                 <p className="font-raleway text-xs text-[#B5B5B5]">
-                  Real-time transaction tracking, currency settlements, and escrow clearance.
+                  Real-time transaction tracking and customer order settlements.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-[#101010] border border-[#222222] p-5 rounded-sm">
                   <span className="text-[10px] font-poppins uppercase text-[#777] block">Gross Platform Sales</span>
-                  <span className="font-oswald text-3xl font-bold text-white">${totalRevenue.toLocaleString()}</span>
+                  <span className="font-oswald text-3xl font-bold text-white">—</span>
+                  <span className="text-[10px] font-poppins text-[#777]">Not connected</span>
                 </div>
                 <div className="bg-[#101010] border border-[#222222] p-5 rounded-sm">
                   <span className="text-[10px] font-poppins uppercase text-[#777] block">Refund Rate</span>
-                  <span className="font-oswald text-3xl font-bold text-emerald-400">0.0%</span>
+                  <span className="font-oswald text-3xl font-bold text-white">—</span>
+                  <span className="text-[10px] font-poppins text-[#777]">Not connected</span>
                 </div>
                 <div className="bg-[#101010] border border-[#222222] p-5 rounded-sm">
-                  <span className="text-[10px] font-poppins uppercase text-[#777] block">Average Order Value (AOV)</span>
-                  <span className="font-oswald text-3xl font-bold text-[#B48A3C]">$68.50</span>
+                  <span className="text-[10px] font-poppins uppercase text-[#777] block">Total Settled Orders</span>
+                  <span className="font-oswald text-3xl font-bold text-[#B48A3C]">
+                    {orders.length}
+                  </span>
+                  <span className="text-[10px] font-poppins text-[#777]">Database orders</span>
                 </div>
               </div>
 
               <div className="bg-[#101010] border border-[#222222] rounded-sm p-6 space-y-4">
                 <h3 className="font-oswald text-lg uppercase font-bold text-white tracking-wider">
-                  Settled Transactions
+                  Production Orders Ledger
                 </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-raleway">
-                    <thead className="bg-[#0A0A0A] text-[#777] font-poppins uppercase text-[10px]">
-                      <tr>
-                        <th className="p-3">Transaction ID</th>
-                        <th className="p-3">Order Ref</th>
-                        <th className="p-3">Client</th>
-                        <th className="p-3">Amount</th>
-                        <th className="p-3">Channel</th>
-                        <th className="p-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#1e1e1e]">
-                      {orders.map((ord, idx) => (
-                        <tr key={ord.id} className="hover:bg-[#141414]">
-                          <td className="p-3 font-mono text-[11px] text-[#777]">tx_stripe_99{idx}21</td>
-                          <td className="p-3 font-oswald text-white font-bold">{ord.orderNumber}</td>
-                          <td className="p-3 text-[#CCCCCC]">{ord.customerName}</td>
-                          <td className="p-3 font-oswald text-white font-bold">${ord.totalAmount} USD</td>
-                          <td className="p-3 text-[#B5B5B5]">Credit Card (Stripe)</td>
-                          <td className="p-3 text-emerald-400 font-bold uppercase text-[10px]">Settled</td>
+                {orders.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-[#777] font-poppins">
+                    No transactions recorded yet
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs font-raleway">
+                      <thead className="bg-[#0A0A0A] text-[#777] font-poppins uppercase text-[10px]">
+                        <tr>
+                          <th className="p-3">Record ID</th>
+                          <th className="p-3">Order Ref</th>
+                          <th className="p-3">Client</th>
+                          <th className="p-3">Amount</th>
+                          <th className="p-3">Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-[#1e1e1e]">
+                        {orders.map((ord) => (
+                          <tr key={ord.id} className="hover:bg-[#141414]">
+                            <td className="p-3 font-mono text-[11px] text-[#777]">rec_neon_{ord.id}</td>
+                            <td className="p-3 font-oswald text-white font-bold">{ord.orderNumber}</td>
+                            <td className="p-3 text-[#CCCCCC]">{ord.customerName}</td>
+                            <td className="p-3 font-oswald text-white font-bold">${ord.totalAmount} USD</td>
+                            <td className="p-3 text-emerald-400 font-bold uppercase text-[10px]">
+                              {(ord.status || 'draft').toUpperCase()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* TAB 7: SYSTEM DIAGNOSTICS & LOGS */}
+          {/* TAB 8: SYSTEM DIAGNOSTICS & LOGS */}
           {activeTab === 'system' && (
             <div className="space-y-6">
               <div>
@@ -1086,7 +1420,7 @@ export const AdminDashboardPage: React.FC = () => {
                   System Diagnostics & Server Console
                 </h2>
                 <p className="font-raleway text-xs text-[#B5B5B5]">
-                  Microservices heartbeat, database connectivity, and Express API logs.
+                  Microservices heartbeat, database connectivity, and Express API status.
                 </p>
               </div>
 
@@ -1094,23 +1428,31 @@ export const AdminDashboardPage: React.FC = () => {
                 <div className="p-4 bg-[#101010] border border-[#222222] rounded-sm flex items-center justify-between">
                   <div>
                     <span className="text-[10px] font-poppins uppercase text-[#777] block">Express API Service</span>
-                    <strong className="text-white font-oswald text-base">Port 5000 (Active)</strong>
+                    <strong className="text-white font-oswald text-base">
+                      {isHealthOk ? 'Online (Active)' : 'Offline / Checking'}
+                    </strong>
+                  </div>
+                  <span
+                    className={`w-3 h-3 rounded-full ${
+                      isHealthOk ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                    }`}
+                  />
+                </div>
+
+                <div className="p-4 bg-[#101010] border border-[#222222] rounded-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-poppins uppercase text-[#777] block">API Gateway Host</span>
+                    <strong className="text-white font-oswald text-base truncate max-w-[170px] block" title={apiHostname}>
+                      {apiHostname}
+                    </strong>
                   </div>
                   <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
                 </div>
 
                 <div className="p-4 bg-[#101010] border border-[#222222] rounded-sm flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] font-poppins uppercase text-[#777] block">Vite Client Service</span>
-                    <strong className="text-white font-oswald text-base">Port 5173 (Active)</strong>
-                  </div>
-                  <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-                </div>
-
-                <div className="p-4 bg-[#101010] border border-[#222222] rounded-sm flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-poppins uppercase text-[#777] block">Storage Vault</span>
-                    <strong className="text-white font-oswald text-base">Cloudflare R2 / S3</strong>
+                    <span className="text-[10px] font-poppins uppercase text-[#777] block">Database Engine</span>
+                    <strong className="text-white font-oswald text-base">Neon Serverless Postgres</strong>
                   </div>
                   <span className="w-3 h-3 rounded-full bg-emerald-500" />
                 </div>
@@ -1118,13 +1460,14 @@ export const AdminDashboardPage: React.FC = () => {
 
               <div className="bg-[#0A0A0A] border border-[#222222] rounded-sm p-4 font-mono text-[11px] text-[#A0A0A0] space-y-2">
                 <span className="text-[#E50914] font-bold block mb-2 font-poppins">
-                  [LIVE STREAMING SERVER LOGS — PINO PRETTY]:
+                  [LIVE STREAMING SERVER DIAGNOSTICS]:
                 </span>
-                <p>[2026-10-19 15:10:44] INFO: Legacy Pixels Server running on http://localhost:5000</p>
-                <p>[2026-10-19 15:11:06] INFO: GET /api/health HTTP/1.1 200 OK (1.2ms)</p>
-                <p>[2026-10-19 15:12:15] INFO: GET /api/services HTTP/1.1 200 OK (2.1ms)</p>
-                <p>[2026-10-19 15:14:02] INFO: POST /api/orders/draft → Order Number Generated LP-2026-881920 (4.8ms)</p>
-                <p className="text-emerald-400">[2026-10-19 15:28:38] SUCCESS: Monorepo compile verified. All 8 disciplines operational.</p>
+                <p>[SYSTEM] API Gateway endpoint: {apiHostname}</p>
+                <p>[HEALTH] GET /api/health returned status: {isHealthOk ? '200 OK' : 'Unavailable'}</p>
+                <p>[DATABASE] Connected to Neon Postgres via serverless driver pool.</p>
+                <p>[ORDERS] Loaded {orders.length} real orders into administrative queue.</p>
+                <p>[LEADS] Loaded {leads.length} commercial inquiries and {messages.length} patron messages.</p>
+                <p className="text-emerald-400">[READY] Enterprise Studio Command Console operational.</p>
               </div>
             </div>
           )}

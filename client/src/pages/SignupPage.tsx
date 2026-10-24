@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Lock, Mail, User, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../lib/api';
+import { GoogleSignInButton } from '../components/common/GoogleSignInButton';
 
 export const SignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -151,6 +152,18 @@ export const SignupPage: React.FC = () => {
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </form>
+
+        {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+          <div className="space-y-4">
+            <div className="relative flex items-center justify-center">
+              <div className="border-t border-[#2A2A2A] w-full" />
+              <span className="bg-[#0D0D0D] px-3 text-[10px] uppercase font-poppins text-[#777] tracking-wider absolute">
+                Or
+              </span>
+            </div>
+            <GoogleSignInButton onSuccess={() => navigate(returnUrl, { replace: true })} />
+          </div>
+        )}
 
         <div className="text-center pt-4 border-t border-[#2A2A2A]">
           <p className="text-xs font-raleway text-[#B5B5B5]">
